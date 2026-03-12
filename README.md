@@ -15,3 +15,4 @@ The API listens on `8081` and exposes `/healthz`, `/ask`, `/fullcontext`, `/mode
 The Ollama connection is configurable with `OLLAMA_MODEL`, `OLLAMA_BASE_URL`, `OLLAMA_TIMEOUT`, and `MAX_CONTEXT`.
 # mps
 # MCP-server
+# MCP-server
