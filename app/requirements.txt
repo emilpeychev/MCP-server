@@ -1,0 +1,10 @@
+langchain
+langchain-ollama
+fastapi
+uvicorn
+langchain-community
+faiss-cpu
+requests
+PyYAML
+httpx
+pytest

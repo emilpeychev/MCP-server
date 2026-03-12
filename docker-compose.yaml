@@ -1,0 +1,38 @@
+services:
+  ollama:
+    container_name: ollama
+    image: ollama/ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama:/root/.ollama
+    restart: unless-stopped
+    mem_limit: 10g      # Limit memory to 10GB
+    cpus: 10.0          # Limit CPU to 10 core
+
+  infra-assistant:
+    container_name: infra-assistant
+    build: .
+    ports:
+      - "8081:8081"
+    environment:
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen2.5-coder:7b}
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - REPO_PATH=/repos/${TARGET_REPO_NAME:-MCP}
+    restart: unless-stopped 
+    volumes:
+      - ${HOST_REPO_ROOT:-/home/eepeychev/repos}:/repos:ro
+      - langchain_data:/app/data
+    depends_on:
+      - ollama
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    mem_limit: 2g      # Limit memory to 2GB
+    cpus: 1.0          # Limit CPU to 1.0 core
+# Stack Volumes      
+volumes:
+  langchain_data:
+  ollama:
