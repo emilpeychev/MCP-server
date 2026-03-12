@@ -1,8 +1,8 @@
 {
-    "servers": {
-        "local-infra-assistant": {
-            "type": "http",
-            "url": "http://127.0.0.1:8081/mcp"
-        }
+  "servers": {
+    "local-infra-assistant": {
+      "type": "http",
+      "url": "http://127.0.0.1:8081/mcp"
     }
+  }
 }

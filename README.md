@@ -2,7 +2,9 @@
 
 This service keeps FastAPI endpoints for automation while exposing repo-aware infrastructure tools through an MCP-compatible HTTP endpoint for editor clients.
 
-Quick start guide for editor usage: [COPILOT_MCP_OLLAMA_GUIDE.md](COPILOT_MCP_OLLAMA_GUIDE.md)
+**New to this?** Start here: [QUICK_START_SIMPLE.md](QUICK_START_SIMPLE.md) — just 3 steps.
+
+Full guide: [COPILOT_MCP_OLLAMA_GUIDE.md](COPILOT_MCP_OLLAMA_GUIDE.md)
 
 ## Architecture
 
