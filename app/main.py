@@ -4,21 +4,33 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Request
 
 from . import llm, mcp_server, prompts, retrieval
+from .cache import tool_cache
 from .models import (
     AnalyzeLogRequest,
     ArgoCDInspectRequest,
     AskRepoRequest,
     AskRequest,
+    CompressLogsRequest,
     ContextRequest,
+    CopilotBriefRequest,
+    FindK8sObjectsRequest,
+    FindRelatedFilesRequest,
     GatewayInspectRequest,
+    ReadFileSliceRequest,
     RenderHelmRequest,
     ReviewYamlRequest,
     SearchRepoRequest,
+    SummarizeFilesRequest,
 )
 from .tools.argocd_analysis import inspect_argocd_applications
+from .tools.copilot_brief import prepare_copilot_brief
+from .tools.file_finder import find_related_files
+from .tools.file_reader import read_file_slice
+from .tools.file_summarizer import summarize_files
 from .tools.gateway_inspection import inspect_gateway_routes
 from .tools.helm_render import render_helm
-from .tools.log_analysis import analyze_log
+from .tools.k8s_finder import find_k8s_objects
+from .tools.log_analysis import analyze_log, compress_logs
 from .tools.repo_search import search_repo
 from .tools.yaml_review import review_yaml
 
@@ -83,6 +95,7 @@ def health():
         "repo_path": stats["repo_path"],
         "indexed_files": stats["indexed_files"],
         "chunks": stats["chunks"],
+        "cache": tool_cache.stats,
     }
 
 
@@ -136,7 +149,7 @@ def analyze_log_endpoint(req: AnalyzeLogRequest):
 @app.post("/render-helm")
 def render_helm_endpoint(req: RenderHelmRequest):
     chart_path = _validate_question(req.chart_path)
-    return render_helm(chart_path=chart_path, values_file=req.values_file)
+    return render_helm(chart_path=chart_path, values_file=req.values_file, summary_only=req.summary_only, max_chars=req.max_chars)
 
 
 @app.post("/inspect-argocd")
@@ -147,6 +160,60 @@ def inspect_argocd_endpoint(req: ArgoCDInspectRequest):
 @app.post("/inspect-gateway")
 def inspect_gateway_endpoint(req: GatewayInspectRequest):
     return inspect_gateway_routes(hostname=req.hostname)
+
+
+# --- New Retrieval endpoints ---
+
+
+@app.post("/read-file-slice")
+def read_file_slice_endpoint(req: ReadFileSliceRequest):
+    return read_file_slice(
+        path=req.path,
+        start_line=req.start_line,
+        end_line=req.end_line,
+        max_chars=req.max_chars,
+    )
+
+
+@app.post("/find-related-files")
+def find_related_files_endpoint(req: FindRelatedFilesRequest):
+    return find_related_files(path=req.path, max_results=req.max_results)
+
+
+@app.post("/find-k8s-objects")
+def find_k8s_objects_endpoint(req: FindK8sObjectsRequest):
+    return find_k8s_objects(
+        kind=req.kind,
+        name=req.name,
+        namespace=req.namespace,
+        max_results=req.max_results,
+    )
+
+
+# --- New Summarization endpoints ---
+
+
+@app.post("/summarize-files")
+def summarize_files_endpoint(req: SummarizeFilesRequest):
+    return summarize_files(paths=req.paths, max_chars_per_file=req.max_chars_per_file, total_budget=req.total_budget)
+
+
+@app.post("/compress-logs")
+def compress_logs_endpoint(req: CompressLogsRequest):
+    log_text = _validate_context(req.log_text)
+    return compress_logs(log_text, max_chars=req.max_chars)
+
+
+@app.post("/prepare-copilot-brief")
+def prepare_copilot_brief_endpoint(req: CopilotBriefRequest):
+    question = _validate_question(req.question)
+    return prepare_copilot_brief(
+        question=question,
+        findings=req.findings,
+        affected_files=req.affected_files,
+        likely_cause=req.likely_cause,
+        verbosity=req.verbosity,
+    )
 
 
 @app.post("/ask-repo")

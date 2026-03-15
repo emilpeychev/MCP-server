@@ -7,6 +7,7 @@ COPY app/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 RUN apt-get update && \
     apt-get install -y curl ca-certificates && \
+    curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash && \
     groupadd -r appuser && useradd -r -g appuser appuser && \
     rm -rf /var/lib/apt/lists/*
 COPY --chown=appuser:appuser app/ ./app

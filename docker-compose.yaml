@@ -18,10 +18,10 @@ services:
     environment:
       - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen2.5-coder:7b}
       - OLLAMA_BASE_URL=http://ollama:11434
-      - REPO_PATH=/repos/${TARGET_REPO_NAME:-MCP}
+      - REPO_PATH=${REPO_PATH:-/repo}
     restart: unless-stopped 
     volumes:
-      - ${HOST_REPO_ROOT:-/home/eepeychev/repos}:/repos:ro
+      - ${HOST_REPO_PATH:-.}:/repo:ro
       - langchain_data:/app/data
     depends_on:
       - ollama
