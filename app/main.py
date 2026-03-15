@@ -10,18 +10,25 @@ from .models import (
     ArgoCDInspectRequest,
     AskRepoRequest,
     AskRequest,
+    ClassifyProblemRequest,
     CompressLogsRequest,
     ContextRequest,
     CopilotBriefRequest,
     FindK8sObjectsRequest,
     FindRelatedFilesRequest,
     GatewayInspectRequest,
+    GetPlaybookRequest,
+    QueryHistoryRequest,
     ReadFileSliceRequest,
+    RecordIssueRequest,
     RenderHelmRequest,
     ReviewYamlRequest,
     SearchRepoRequest,
     SummarizeFilesRequest,
 )
+from .classifier import classify_to_dict
+from .issue_memory import query_history_dict, record_issue_dict
+from .playbooks import playbook_to_dict
 from .tools.argocd_analysis import inspect_argocd_applications
 from .tools.copilot_brief import prepare_copilot_brief
 from .tools.file_finder import find_related_files
@@ -213,6 +220,14 @@ def prepare_copilot_brief_endpoint(req: CopilotBriefRequest):
         affected_files=req.affected_files,
         likely_cause=req.likely_cause,
         verbosity=req.verbosity,
+        detected_pattern=req.detected_pattern,
+        confidence=req.confidence,
+        relevant_resources=req.relevant_resources,
+        checks_performed=req.checks_performed,
+        missing_evidence=req.missing_evidence,
+        recommended_next_step=req.recommended_next_step,
+        ask_copilot=req.ask_copilot,
+        past_causes=req.past_causes,
     )
 
 
@@ -223,6 +238,29 @@ def ask_repo_endpoint(req: AskRepoRequest):
         return invoke_repo_question(question, limit=req.limit)
     except Exception as exc:
         raise HTTPException(status_code=502, detail="Repo-aware reasoning failed.") from exc
+
+
+# --- Diagnostic endpoints ---
+
+
+@app.post("/classify-problem")
+def classify_problem_endpoint(req: ClassifyProblemRequest):
+    return classify_to_dict(req.text, top_n=req.top_n)
+
+
+@app.post("/get-playbook")
+def get_playbook_endpoint(req: GetPlaybookRequest):
+    return playbook_to_dict(req.pattern)
+
+
+@app.post("/record-issue")
+def record_issue_endpoint(req: RecordIssueRequest):
+    return record_issue_dict(req.model_dump())
+
+
+@app.post("/query-history")
+def query_history_endpoint(req: QueryHistoryRequest):
+    return query_history_dict(req.pattern)
 
 
 @app.post("/mcp")

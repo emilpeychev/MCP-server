@@ -118,6 +118,11 @@ def test_mcp_tools_list():
     assert "inspect_argocd" in tool_names
     assert "inspect_gateway" in tool_names
     assert "prepare_copilot_brief" in tool_names
+    # Diagnostic layer
+    assert "classify_problem" in tool_names
+    assert "get_playbook" in tool_names
+    assert "record_issue" in tool_names
+    assert "query_history" in tool_names
 
 
 def test_inspect_argocd_endpoint(monkeypatch):
@@ -267,10 +272,10 @@ def test_compress_logs_endpoint(monkeypatch):
 
 
 def test_prepare_copilot_brief_endpoint(monkeypatch):
-    monkeypatch.setattr(main_module, "prepare_copilot_brief", lambda question, findings=None, affected_files=None, likely_cause=None, verbosity="compact": {
+    monkeypatch.setattr(main_module, "prepare_copilot_brief", lambda question, findings=None, affected_files=None, likely_cause=None, verbosity="compact", **kwargs: {
         "result": f"## Question\n{question}\n\n## Action Needed\nAnalyze the above findings and suggest the fix.",
         "files": affected_files or [],
-        "data": {"question": question, "findings": findings or [], "affected_files": affected_files or [], "likely_cause": likely_cause or "", "verbosity": verbosity},
+        "data": {"question": question, "findings": findings or [], "affected_files": affected_files or [], "likely_cause": likely_cause or "", "verbosity": verbosity, "detected_pattern": kwargs.get("detected_pattern")},
     })
 
     response = client.post("/prepare-copilot-brief", json={
@@ -278,11 +283,13 @@ def test_prepare_copilot_brief_endpoint(monkeypatch):
         "findings": ["HTTPRoute missing parentRefs"],
         "affected_files": ["gateway/route.yaml"],
         "likely_cause": "Missing gateway reference",
+        "detected_pattern": "gateway_backend_failure",
     })
 
     assert response.status_code == 200
     assert "ingress fail" in response.json()["data"]["question"]
     assert response.json()["data"]["likely_cause"] == "Missing gateway reference"
+    assert response.json()["data"]["detected_pattern"] == "gateway_backend_failure"
 
 
 def test_mcp_tool_call_compress_logs(monkeypatch):
@@ -308,7 +315,7 @@ def test_mcp_tool_call_compress_logs(monkeypatch):
 
 
 def test_mcp_tool_call_prepare_copilot_brief(monkeypatch):
-    monkeypatch.setattr(main_module.mcp_server, "prepare_copilot_brief", lambda question, findings=None, affected_files=None, likely_cause=None, verbosity="compact": {
+    monkeypatch.setattr(main_module.mcp_server, "prepare_copilot_brief", lambda question, findings=None, affected_files=None, likely_cause=None, verbosity="compact", **kwargs: {
         "result": f"## Question\n{question}",
         "files": affected_files or [],
         "data": {"question": question, "findings": findings or [], "affected_files": affected_files or [], "likely_cause": likely_cause or ""},
@@ -384,4 +391,283 @@ def test_copilot_brief_verbosity():
     detailed = prepare_copilot_brief(question="test", findings=["f1"] * 50, verbosity="detailed")
     assert compact["data"]["verbosity"] == "compact"
     assert detailed["data"]["verbosity"] == "detailed"
+
+
+# --- Classifier unit tests ---
+
+
+def test_classifier_detects_crashloop():
+    from app.classifier import classify
+
+    results = classify("Pod my-app is in CrashLoopBackOff with exit code 137")
+    assert len(results) >= 1
+    assert results[0].pattern == "crashloop_backoff"
+    assert results[0].confidence > 0
+
+
+def test_classifier_no_match():
+    from app.classifier import classify
+
+    results = classify("Everything looks fine no errors")
+    assert results == []
+
+
+def test_classify_to_dict_format():
+    from app.classifier import classify_to_dict
+
+    result = classify_to_dict("argocd sync failed out of sync")
+    assert result["data"]["top_pattern"] == "argocd_out_of_sync"
+    assert len(result["data"]["classifications"]) >= 1
+
+
+def test_classify_to_dict_no_match():
+    from app.classifier import classify_to_dict
+
+    result = classify_to_dict("nothing wrong here")
+    assert result["data"]["top_pattern"] is None
+    assert result["data"]["classifications"] == []
+
+
+# --- Playbook unit tests ---
+
+
+def test_playbook_exists_for_all_patterns():
+    from app.classifier import PATTERNS
+    from app.playbooks import PLAYBOOKS
+
+    for pattern in PATTERNS:
+        assert pattern in PLAYBOOKS, f"Missing playbook for pattern: {pattern}"
+
+
+def test_playbook_to_dict_known():
+    from app.playbooks import playbook_to_dict
+
+    result = playbook_to_dict("crashloop_backoff")
+    assert len(result["data"]["steps"]) > 0
+    assert result["data"]["cluster_steps_available"] is False
+    assert len(result["data"]["common_root_causes"]) > 0
+
+
+def test_playbook_to_dict_unknown():
+    from app.playbooks import playbook_to_dict
+
+    result = playbook_to_dict("nonexistent_pattern")
+    assert result["data"] == {}
+
+
+def test_get_repo_steps_excludes_cluster():
+    from app.playbooks import get_repo_steps
+
+    steps = get_repo_steps("crashloop_backoff")
+    for step in steps:
+        assert not step.requires_cluster
+
+
+def test_get_cluster_steps_only_cluster():
+    from app.playbooks import get_cluster_steps
+
+    steps = get_cluster_steps("crashloop_backoff")
+    assert len(steps) > 0
+    for step in steps:
+        assert step.requires_cluster
+
+
+# --- Issue memory unit tests ---
+
+
+def test_issue_memory_record_and_query(tmp_path):
+    from app.issue_memory import IssueMemory, IssueRecord
+
+    mem = IssueMemory(db_path=tmp_path / "test.db")
+    issue_id = mem.record_issue(IssueRecord(
+        pattern="crashloop_backoff",
+        resource="Deployment/my-app",
+        root_cause="OOMKilled",
+        findings=["pod restarting"],
+        tools_used=["search_repo"],
+        tool_order=["search_repo"],
+        resolved=True,
+    ))
+    assert issue_id is not None
+
+    similar = mem.get_similar("crashloop_backoff")
+    assert len(similar) == 1
+    assert similar[0].pattern == "crashloop_backoff"
+    assert similar[0].root_cause == "OOMKilled"
+
+
+def test_issue_memory_common_causes(tmp_path):
+    from app.issue_memory import IssueMemory, IssueRecord
+
+    mem = IssueMemory(db_path=tmp_path / "test.db")
+    for _ in range(3):
+        mem.record_issue(IssueRecord(pattern="crashloop_backoff", root_cause="OOMKilled", resolved=True))
+    mem.record_issue(IssueRecord(pattern="crashloop_backoff", root_cause="Bad entrypoint", resolved=True))
+
+    causes = mem.get_common_causes("crashloop_backoff")
+    assert causes[0]["root_cause"] == "OOMKilled"
+    assert causes[0]["count"] == 3
+
+
+def test_issue_memory_stats(tmp_path):
+    from app.issue_memory import IssueMemory, IssueRecord
+
+    mem = IssueMemory(db_path=tmp_path / "test.db")
+    mem.record_issue(IssueRecord(pattern="crashloop_backoff", resolved=True))
+    mem.record_issue(IssueRecord(pattern="crashloop_backoff", resolved=False))
+
+    stats = mem.stats()
+    assert stats["total_issues"] == 2
+    assert stats["resolved"] == 1
+    assert stats["unresolved"] == 1
+
+
+def test_record_issue_dict_wrapper(tmp_path, monkeypatch):
+    import app.issue_memory as mem_module
+    from app.issue_memory import IssueMemory
+
+    test_mem = IssueMemory(db_path=tmp_path / "test.db")
+    monkeypatch.setattr(mem_module, "_memory", test_mem)
+
+    from app.issue_memory import record_issue_dict
+    result = record_issue_dict({"pattern": "argocd_out_of_sync", "resource": "app/my-app", "resolved": True})
+    assert result["data"]["issue_id"] is not None
+    assert result["data"]["pattern"] == "argocd_out_of_sync"
+
+
+def test_query_history_dict_wrapper(tmp_path, monkeypatch):
+    import app.issue_memory as mem_module
+    from app.issue_memory import IssueMemory, IssueRecord
+
+    test_mem = IssueMemory(db_path=tmp_path / "test.db")
+    test_mem.record_issue(IssueRecord(pattern="crashloop_backoff", root_cause="OOM", resolved=True))
+    monkeypatch.setattr(mem_module, "_memory", test_mem)
+
+    from app.issue_memory import query_history_dict
+    result = query_history_dict("crashloop_backoff")
+    assert len(result["data"]["past_issues"]) == 1
+    assert result["data"]["common_causes"][0]["root_cause"] == "OOM"
+
+
+# --- Diagnostic REST endpoint tests ---
+
+
+def test_classify_problem_endpoint():
+    response = client.post("/classify-problem", json={"text": "ArgoCD app out of sync comparison error"})
+
+    assert response.status_code == 200
+    assert response.json()["data"]["top_pattern"] == "argocd_out_of_sync"
+
+
+def test_get_playbook_endpoint():
+    response = client.post("/get-playbook", json={"pattern": "crashloop_backoff"})
+
+    assert response.status_code == 200
+    assert len(response.json()["data"]["steps"]) > 0
+
+
+def test_record_issue_endpoint(tmp_path, monkeypatch):
+    import app.issue_memory as mem_module
+    from app.issue_memory import IssueMemory
+
+    test_mem = IssueMemory(db_path=tmp_path / "test.db")
+    monkeypatch.setattr(mem_module, "_memory", test_mem)
+
+    response = client.post("/record-issue", json={"pattern": "crashloop_backoff", "resource": "Deployment/test"})
+
+    assert response.status_code == 200
+    assert response.json()["data"]["issue_id"] is not None
+
+
+def test_query_history_endpoint(tmp_path, monkeypatch):
+    import app.issue_memory as mem_module
+    from app.issue_memory import IssueMemory
+
+    test_mem = IssueMemory(db_path=tmp_path / "test.db")
+    monkeypatch.setattr(mem_module, "_memory", test_mem)
+
+    response = client.post("/query-history", json={"pattern": "crashloop_backoff"})
+
+    assert response.status_code == 200
+    assert response.json()["data"]["pattern"] == "crashloop_backoff"
+
+
+# --- MCP diagnostic tool call tests ---
+
+
+def test_mcp_tool_call_classify_problem():
+    response = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 10,
+            "method": "tools/call",
+            "params": {"name": "classify_problem", "arguments": {"text": "pod CrashLoopBackOff exit code 137"}},
+        },
+    )
+
+    assert response.status_code == 200
+    content = response.json()["result"]["structuredContent"]
+    assert content["data"]["top_pattern"] == "crashloop_backoff"
+
+
+def test_mcp_tool_call_get_playbook():
+    response = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 11,
+            "method": "tools/call",
+            "params": {"name": "get_playbook", "arguments": {"pattern": "argocd_out_of_sync"}},
+        },
+    )
+
+    assert response.status_code == 200
+    content = response.json()["result"]["structuredContent"]
+    assert content["data"]["pattern"] == "argocd_out_of_sync"
+    assert len(content["data"]["steps"]) > 0
+
+
+def test_mcp_tool_call_record_issue(tmp_path, monkeypatch):
+    import app.issue_memory as mem_module
+    from app.issue_memory import IssueMemory
+
+    test_mem = IssueMemory(db_path=tmp_path / "test.db")
+    monkeypatch.setattr(mem_module, "_memory", test_mem)
+
+    response = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 12,
+            "method": "tools/call",
+            "params": {"name": "record_issue", "arguments": {"pattern": "crashloop_backoff", "resource": "Deployment/test", "resolved": True}},
+        },
+    )
+
+    assert response.status_code == 200
+    content = response.json()["result"]["structuredContent"]
+    assert content["data"]["issue_id"] is not None
+
+
+def test_mcp_tool_call_query_history(tmp_path, monkeypatch):
+    import app.issue_memory as mem_module
+    from app.issue_memory import IssueMemory
+
+    test_mem = IssueMemory(db_path=tmp_path / "test.db")
+    monkeypatch.setattr(mem_module, "_memory", test_mem)
+
+    response = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 13,
+            "method": "tools/call",
+            "params": {"name": "query_history", "arguments": {"pattern": "crashloop_backoff"}},
+        },
+    )
+
+    assert response.status_code == 200
+    content = response.json()["result"]["structuredContent"]
+    assert content["data"]["pattern"] == "crashloop_backoff"
 

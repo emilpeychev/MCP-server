@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from fastapi.responses import JSONResponse
 
+from .classifier import classify_to_dict
+from .issue_memory import query_history_dict, record_issue_dict
+from .playbooks import playbook_to_dict
 from .tools.argocd_analysis import inspect_argocd_applications
 from .tools.copilot_brief import prepare_copilot_brief
 from .tools.file_finder import find_related_files
@@ -301,7 +304,7 @@ SUMMARIZATION_TOOLS = {
         "description": (
             "Final handoff tool. Builds a structured, distilled brief for Copilot from previous tool results. "
             "Call this LAST, after retrieval and summarization, to package the question, "
-            "key findings, affected files, and likely cause into one compact payload. "
+            "key findings, affected files, detected pattern, and likely cause into one compact payload. "
             "Copilot should receive this brief and then provide the fix."
         ),
         "inputSchema": {
@@ -325,6 +328,42 @@ SUMMARIZATION_TOOLS = {
                     "type": ["string", "null"],
                     "description": "Short description of the probable root cause.",
                 },
+                "detected_pattern": {
+                    "type": ["string", "null"],
+                    "description": "Problem pattern from classify_problem (e.g. crashloop_backoff).",
+                },
+                "confidence": {
+                    "type": ["number", "null"],
+                    "description": "Classifier confidence (0.0-1.0).",
+                },
+                "relevant_resources": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "K8s resources involved (e.g. Deployment/my-app).",
+                },
+                "checks_performed": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "List of checks already performed.",
+                },
+                "missing_evidence": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Evidence that could not be gathered (e.g. cluster access needed).",
+                },
+                "recommended_next_step": {
+                    "type": ["string", "null"],
+                    "description": "What to do next if the issue is not yet resolved.",
+                },
+                "ask_copilot": {
+                    "type": ["string", "null"],
+                    "description": "Specific question for Copilot to answer.",
+                },
+                "past_causes": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Root causes from past similar issues (from issue history).",
+                },
                 "verbosity": {
                     "type": "string",
                     "enum": ["compact", "normal", "detailed"],
@@ -340,12 +379,136 @@ SUMMARIZATION_TOOLS = {
             affected_files=args.get("affected_files"),
             likely_cause=args.get("likely_cause"),
             verbosity=args.get("verbosity", "compact"),
+            detected_pattern=args.get("detected_pattern"),
+            confidence=args.get("confidence"),
+            relevant_resources=args.get("relevant_resources"),
+            checks_performed=args.get("checks_performed"),
+            missing_evidence=args.get("missing_evidence"),
+            recommended_next_step=args.get("recommended_next_step"),
+            ask_copilot=args.get("ask_copilot"),
+            past_causes=args.get("past_causes"),
         ),
     },
 }
 
 # Combined registry — used by the MCP handler.
-TOOLS = {**RETRIEVAL_TOOLS, **SUMMARIZATION_TOOLS}
+
+# ---------------------------------------------------------------------------
+# Layer 3 — Diagnostic tools
+# These tools CLASSIFY problems, look up PLAYBOOKS, and manage ISSUE HISTORY.
+# They tie the retrieval + summarization layers into guided troubleshooting.
+# ---------------------------------------------------------------------------
+DIAGNOSTIC_TOOLS = {
+    "classify_problem": {
+        "description": (
+            "Classify a question or log snippet into a known problem pattern (e.g. crashloop_backoff, argocd_out_of_sync). "
+            "Returns ranked patterns with confidence and matching signals. "
+            "Call this FIRST to guide which playbook and tools to use."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "text": {
+                    "type": "string",
+                    "description": "Question, error message, or log snippet to classify.",
+                },
+                "top_n": {
+                    "type": "integer",
+                    "default": 3,
+                    "description": "Maximum number of pattern matches to return.",
+                },
+            },
+            "required": ["text"],
+        },
+        "handler": lambda args: classify_to_dict(args["text"], top_n=args.get("top_n", 3)),
+    },
+    "get_playbook": {
+        "description": (
+            "Get the troubleshooting playbook for a detected problem pattern. "
+            "Returns ordered steps, common root causes, stop conditions, and key resources. "
+            "Use this after classify_problem to know what to check and in what order."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "pattern": {
+                    "type": "string",
+                    "description": "Problem pattern name (e.g. 'crashloop_backoff', 'argocd_out_of_sync').",
+                },
+            },
+            "required": ["pattern"],
+        },
+        "handler": lambda args: playbook_to_dict(args["pattern"]),
+    },
+    "record_issue": {
+        "description": (
+            "Record a troubleshooting issue to the persistent issue memory. "
+            "Store the pattern, resource, root cause, findings, and tools used. "
+            "Call this after resolving or after a diagnostic session to build history."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "pattern": {
+                    "type": "string",
+                    "description": "Problem pattern name.",
+                },
+                "resource": {
+                    "type": "string",
+                    "description": "Primary resource involved (e.g. 'Deployment/my-app').",
+                    "default": "",
+                },
+                "root_cause": {
+                    "type": "string",
+                    "description": "Identified root cause.",
+                    "default": "",
+                },
+                "findings": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Key findings from the diagnostic session.",
+                },
+                "tools_used": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Tools that were called during diagnosis.",
+                },
+                "tool_order": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Order in which tools were called.",
+                },
+                "resolved": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "Whether the issue was resolved.",
+                },
+            },
+            "required": ["pattern"],
+        },
+        "handler": lambda args: record_issue_dict(args),
+    },
+    "query_history": {
+        "description": (
+            "Query the issue memory for past issues matching a problem pattern. "
+            "Returns past issues, common root causes, and the best tool order from resolved issues. "
+            "Use this to prioritize what to check based on what worked before."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "pattern": {
+                    "type": "string",
+                    "description": "Problem pattern to look up history for.",
+                },
+            },
+            "required": ["pattern"],
+        },
+        "handler": lambda args: query_history_dict(args["pattern"]),
+    },
+}
+
+TOOLS = {**RETRIEVAL_TOOLS, **SUMMARIZATION_TOOLS, **DIAGNOSTIC_TOOLS}
 
 
 def handle_request(payload: dict) -> JSONResponse:
@@ -358,7 +521,7 @@ def handle_request(payload: dict) -> JSONResponse:
                 request_id,
                 {
                     "protocolVersion": "2024-11-05",
-                    "serverInfo": {"name": "local-infra-assistant", "version": "0.2.0"},
+                    "serverInfo": {"name": "local-infra-assistant", "version": "0.3.0"},
                     "capabilities": {"tools": {}},
                 },
             )

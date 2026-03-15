@@ -76,6 +76,37 @@ class CopilotBriefRequest(BaseModel):
     affected_files: list[str] | None = Field(default=None, description="Relevant file paths.")
     likely_cause: str | None = Field(default=None, description="Probable root cause.")
     verbosity: str = Field(default="compact", description="Output verbosity: compact, normal, or detailed.")
+    detected_pattern: str | None = Field(default=None, description="Problem pattern from classifier.")
+    confidence: float | None = Field(default=None, description="Classifier confidence (0.0-1.0).")
+    relevant_resources: list[str] | None = Field(default=None, description="K8s resources involved.")
+    checks_performed: list[str] | None = Field(default=None, description="Checks already performed.")
+    missing_evidence: list[str] | None = Field(default=None, description="Evidence not yet gathered.")
+    recommended_next_step: str | None = Field(default=None, description="Next recommended action.")
+    ask_copilot: str | None = Field(default=None, description="Specific question for Copilot.")
+    past_causes: list[str] | None = Field(default=None, description="Root causes from past similar issues.")
+
+
+class ClassifyProblemRequest(BaseModel):
+    text: str = Field(..., description="Question, error message, or log snippet to classify.")
+    top_n: int = Field(default=3, ge=1, le=10, description="Maximum pattern matches to return.")
+
+
+class GetPlaybookRequest(BaseModel):
+    pattern: str = Field(..., description="Problem pattern name (e.g. crashloop_backoff).")
+
+
+class RecordIssueRequest(BaseModel):
+    pattern: str = Field(..., description="Problem pattern name.")
+    resource: str = Field(default="", description="Primary resource involved.")
+    root_cause: str = Field(default="", description="Identified root cause.")
+    findings: list[str] = Field(default_factory=list, description="Key findings.")
+    tools_used: list[str] = Field(default_factory=list, description="Tools called during diagnosis.")
+    tool_order: list[str] = Field(default_factory=list, description="Order of tool calls.")
+    resolved: bool = Field(default=False, description="Whether the issue was resolved.")
+
+
+class QueryHistoryRequest(BaseModel):
+    pattern: str = Field(..., description="Problem pattern to look up history for.")
 
 
 class AskRepoRequest(BaseModel):
