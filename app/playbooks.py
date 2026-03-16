@@ -66,7 +66,10 @@ PLAYBOOKS: dict[str, Playbook] = {
         steps=[
             PlaybookStep("Inspect ArgoCD applications", "inspect_argocd", {}),
             PlaybookStep("Search repo for ArgoCD Application manifests", "search_repo", {"query": "ArgoCD Application"}),
+            PlaybookStep("Search repo for OpenTofu modules affecting app infra", "search_repo", {"query": "tofu terraform module"}),
             PlaybookStep("Find Helm values files", "search_repo", {"query": "values.yaml"}),
+            PlaybookStep("Validate OpenTofu configuration", "opentofu_validate", {}, requires_cluster=True),
+            PlaybookStep("Generate OpenTofu plan for drift check", "opentofu_plan", {}, requires_cluster=True),
             PlaybookStep("Render Helm chart and compare", "render_helm", {}),
             PlaybookStep("Get ArgoCD app status", "argocd_get_app", {}, requires_cluster=True),
             PlaybookStep("Get ArgoCD app events", "argocd_get_app_events", {}, requires_cluster=True),
@@ -76,6 +79,7 @@ PLAYBOOKS: dict[str, Playbook] = {
         common_root_causes=[
             "Values drift between repo and rendered manifest",
             "Manual cluster edit not in Git",
+            "OpenTofu-managed infra drift from expected state",
             "Helm chart version mismatch",
             "Missing annotation or label change",
             "Target revision mismatch",
@@ -193,14 +197,18 @@ PLAYBOOKS: dict[str, Playbook] = {
         pattern="helm_values_mismatch",
         steps=[
             PlaybookStep("Search for Helm charts", "search_repo", {"query": "Chart.yaml values.yaml"}),
+            PlaybookStep("Search for OpenTofu variables tied to Helm values", "search_repo", {"query": "tofu terraform variable helm"}),
             PlaybookStep("Find values files", "find_related_files", {"path": "values.yaml"}),
             PlaybookStep("Read values file", "read_file_slice", {}),
+            PlaybookStep("Run OpenTofu format check", "opentofu_fmt_check", {}, requires_cluster=True),
+            PlaybookStep("Validate OpenTofu inputs", "opentofu_validate", {}, requires_cluster=True),
             PlaybookStep("Render Helm chart", "render_helm", {"summary_only": True}),
             PlaybookStep("Summarize rendered output", "summarize_files", {}),
             PlaybookStep("Prepare Copilot brief", "prepare_copilot_brief", {}),
         ],
         common_root_causes=[
             "Value overridden in environment-specific file",
+            "OpenTofu variable value differs from expected Helm input",
             "Template references key that doesn't exist in values",
             "Chart dependency version changed",
             "Subchart values not under correct key",

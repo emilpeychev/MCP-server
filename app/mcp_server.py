@@ -1,11 +1,40 @@
 from __future__ import annotations
 
+import os
+import shutil
+
 from fastapi.responses import JSONResponse
 
+from . import retrieval
 from .classifier import classify_to_dict
 from .issue_memory import query_history_dict, record_issue_dict
 from .playbooks import playbook_to_dict
 from .tools.argocd_analysis import inspect_argocd_applications
+from .tools.cluster_stubs import (
+    argocd_get_app,
+    argocd_get_app_events,
+    argocd_get_app_resources,
+    kubectl_describe_pod,
+    kubectl_get_endpoints,
+    kubectl_get_events,
+    kubectl_get_gateway,
+    kubectl_get_httproute,
+    kubectl_get_ingress,
+    kubectl_get_pods,
+    kubectl_get_service,
+    kubectl_logs,
+    kubectl_logs_previous,
+    opentofu_fmt_check,
+    opentofu_plan,
+    opentofu_show_plan,
+    opentofu_validate,
+    opentofu_version,
+    terraform_fmt_check,
+    terraform_plan,
+    terraform_show_plan,
+    terraform_validate,
+    terraform_version,
+)
 from .tools.copilot_brief import prepare_copilot_brief
 from .tools.file_finder import find_related_files
 from .tools.file_reader import read_file_slice
@@ -508,7 +537,265 @@ DIAGNOSTIC_TOOLS = {
     },
 }
 
-TOOLS = {**RETRIEVAL_TOOLS, **SUMMARIZATION_TOOLS, **DIAGNOSTIC_TOOLS}
+
+def _runtime_environment_info() -> dict:
+    stats = retrieval.get_index_stats()
+    selector = os.getenv("WORKSPACE_REPO_NAME", "") or os.getenv("TARGET_REPO_NAME", "")
+    return {
+        "result": "Runtime environment snapshot collected.",
+        "files": [],
+        "data": {
+            "repo_path": stats.get("repo_path", ""),
+            "indexed_files": stats.get("indexed_files", 0),
+            "chunks": stats.get("chunks", 0),
+            "workspace_repo_selector": selector,
+            "env": {
+                "REPO_PATH": os.getenv("REPO_PATH", ""),
+                "HOST_REPO_PATH": os.getenv("HOST_REPO_PATH", ""),
+                "HOST_REPO_ROOT": os.getenv("HOST_REPO_ROOT", ""),
+                "WORKSPACE_REPO_NAME": os.getenv("WORKSPACE_REPO_NAME", ""),
+                "TARGET_REPO_NAME": os.getenv("TARGET_REPO_NAME", ""),
+            },
+            "cli_available": {
+                "kubectl": shutil.which("kubectl") is not None,
+                "argocd": shutil.which("argocd") is not None,
+                "opentofu": shutil.which("tofu") is not None or shutil.which("opentofu") is not None,
+                "terraform": shutil.which("terraform") is not None,
+            },
+        },
+    }
+
+
+RUNTIME_TOOLS = {
+    "runtime_environment_info": {
+        "description": (
+            "Return runtime environment details used by the assistant: active repo path, index stats, "
+            "workspace selector env vars, and whether kubectl/argocd/opentofu/terraform CLIs are available."
+        ),
+        "inputSchema": {"type": "object", "properties": {}},
+        "handler": lambda _: _runtime_environment_info(),
+    },
+    "kubectl_get_pods": {
+        "description": "Stub for kubectl get pods. Returns not-configured status until cluster access is enabled.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "namespace": {"type": ["string", "null"]},
+                "label_selector": {"type": ["string", "null"]},
+            },
+        },
+        "handler": lambda args: kubectl_get_pods(namespace=args.get("namespace"), label_selector=args.get("label_selector")),
+    },
+    "kubectl_describe_pod": {
+        "description": "Stub for kubectl describe pod.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"name": {"type": "string"}, "namespace": {"type": ["string", "null"]}},
+            "required": ["name"],
+        },
+        "handler": lambda args: kubectl_describe_pod(name=args["name"], namespace=args.get("namespace")),
+    },
+    "kubectl_get_events": {
+        "description": "Stub for kubectl get events.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "namespace": {"type": ["string", "null"]},
+                "field_selector": {"type": ["string", "null"]},
+            },
+        },
+        "handler": lambda args: kubectl_get_events(namespace=args.get("namespace"), field_selector=args.get("field_selector")),
+    },
+    "kubectl_logs": {
+        "description": "Stub for kubectl logs.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string"},
+                "namespace": {"type": ["string", "null"]},
+                "container": {"type": ["string", "null"]},
+            },
+            "required": ["name"],
+        },
+        "handler": lambda args: kubectl_logs(name=args["name"], namespace=args.get("namespace"), container=args.get("container")),
+    },
+    "kubectl_logs_previous": {
+        "description": "Stub for kubectl logs --previous.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string"},
+                "namespace": {"type": ["string", "null"]},
+                "container": {"type": ["string", "null"]},
+            },
+            "required": ["name"],
+        },
+        "handler": lambda args: kubectl_logs_previous(name=args["name"], namespace=args.get("namespace"), container=args.get("container")),
+    },
+    "kubectl_get_service": {
+        "description": "Stub for kubectl get service.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"name": {"type": ["string", "null"]}, "namespace": {"type": ["string", "null"]}},
+        },
+        "handler": lambda args: kubectl_get_service(name=args.get("name"), namespace=args.get("namespace")),
+    },
+    "kubectl_get_endpoints": {
+        "description": "Stub for kubectl get endpoints.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"name": {"type": ["string", "null"]}, "namespace": {"type": ["string", "null"]}},
+        },
+        "handler": lambda args: kubectl_get_endpoints(name=args.get("name"), namespace=args.get("namespace")),
+    },
+    "kubectl_get_ingress": {
+        "description": "Stub for kubectl get ingress.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"name": {"type": ["string", "null"]}, "namespace": {"type": ["string", "null"]}},
+        },
+        "handler": lambda args: kubectl_get_ingress(name=args.get("name"), namespace=args.get("namespace")),
+    },
+    "kubectl_get_gateway": {
+        "description": "Stub for kubectl get gateway.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"name": {"type": ["string", "null"]}, "namespace": {"type": ["string", "null"]}},
+        },
+        "handler": lambda args: kubectl_get_gateway(name=args.get("name"), namespace=args.get("namespace")),
+    },
+    "kubectl_get_httproute": {
+        "description": "Stub for kubectl get httproute.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"name": {"type": ["string", "null"]}, "namespace": {"type": ["string", "null"]}},
+        },
+        "handler": lambda args: kubectl_get_httproute(name=args.get("name"), namespace=args.get("namespace")),
+    },
+    "argocd_get_app": {
+        "description": "Stub for argocd app get.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"app_name": {"type": "string"}},
+            "required": ["app_name"],
+        },
+        "handler": lambda args: argocd_get_app(app_name=args["app_name"]),
+    },
+    "argocd_get_app_events": {
+        "description": "Stub for argocd app events.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"app_name": {"type": "string"}},
+            "required": ["app_name"],
+        },
+        "handler": lambda args: argocd_get_app_events(app_name=args["app_name"]),
+    },
+    "argocd_get_app_resources": {
+        "description": "Stub for argocd app resources.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"app_name": {"type": "string"}},
+            "required": ["app_name"],
+        },
+        "handler": lambda args: argocd_get_app_resources(app_name=args["app_name"]),
+    },
+    "opentofu_version": {
+        "description": "Stub for OpenTofu version check.",
+        "inputSchema": {"type": "object", "properties": {}},
+        "handler": lambda _: opentofu_version(),
+    },
+    "opentofu_fmt_check": {
+        "description": "Stub for OpenTofu format check.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"path": {"type": ["string", "null"]}},
+        },
+        "handler": lambda args: opentofu_fmt_check(path=args.get("path")),
+    },
+    "opentofu_validate": {
+        "description": "Stub for OpenTofu validate.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": ["string", "null"]},
+                "var_file": {"type": ["string", "null"]},
+            },
+        },
+        "handler": lambda args: opentofu_validate(path=args.get("path"), var_file=args.get("var_file")),
+    },
+    "opentofu_plan": {
+        "description": "Stub for OpenTofu plan.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": ["string", "null"]},
+                "var_file": {"type": ["string", "null"]},
+                "target": {"type": ["string", "null"]},
+            },
+        },
+        "handler": lambda args: opentofu_plan(path=args.get("path"), var_file=args.get("var_file"), target=args.get("target")),
+    },
+    "opentofu_show_plan": {
+        "description": "Stub for OpenTofu show plan output.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": ["string", "null"]},
+                "plan_file": {"type": ["string", "null"]},
+            },
+        },
+        "handler": lambda args: opentofu_show_plan(path=args.get("path"), plan_file=args.get("plan_file")),
+    },
+    "terraform_version": {
+        "description": "Stub for Terraform version check.",
+        "inputSchema": {"type": "object", "properties": {}},
+        "handler": lambda _: terraform_version(),
+    },
+    "terraform_fmt_check": {
+        "description": "Stub for Terraform format check.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"path": {"type": ["string", "null"]}},
+        },
+        "handler": lambda args: terraform_fmt_check(path=args.get("path")),
+    },
+    "terraform_validate": {
+        "description": "Stub for Terraform validate.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": ["string", "null"]},
+                "var_file": {"type": ["string", "null"]},
+            },
+        },
+        "handler": lambda args: terraform_validate(path=args.get("path"), var_file=args.get("var_file")),
+    },
+    "terraform_plan": {
+        "description": "Stub for Terraform plan.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": ["string", "null"]},
+                "var_file": {"type": ["string", "null"]},
+                "target": {"type": ["string", "null"]},
+            },
+        },
+        "handler": lambda args: terraform_plan(path=args.get("path"), var_file=args.get("var_file"), target=args.get("target")),
+    },
+    "terraform_show_plan": {
+        "description": "Stub for Terraform show plan output.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": ["string", "null"]},
+                "plan_file": {"type": ["string", "null"]},
+            },
+        },
+        "handler": lambda args: terraform_show_plan(path=args.get("path"), plan_file=args.get("plan_file")),
+    },
+}
+
+TOOLS = {**RETRIEVAL_TOOLS, **SUMMARIZATION_TOOLS, **DIAGNOSTIC_TOOLS, **RUNTIME_TOOLS}
 
 
 def handle_request(payload: dict) -> JSONResponse:

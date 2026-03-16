@@ -4,7 +4,7 @@
 
 A local **Model Context Protocol (MCP)** server that gives VS Code Copilot deep awareness of your infrastructure repository — Helm charts, Kubernetes manifests, ArgoCD applications, Gateway API routes, and more.
 
-Instead of copying YAML into chat and hoping the AI understands your cluster layout, this server indexes your GitOps repo and exposes 15 specialized tools that Copilot can call autonomously to search, read, summarize, and diagnose infrastructure problems.
+Instead of copying YAML into chat and hoping the AI understands your cluster layout, this server indexes your GitOps repo and exposes specialized tools that Copilot can call autonomously to search, read, summarize, and diagnose infrastructure problems.
 
 The core idea: **Copilot becomes an infrastructure-aware pair programmer** that can look things up in your repo, follow troubleshooting playbooks, and learn from past issues — all running locally with no cloud dependencies beyond Ollama.
 
@@ -12,7 +12,7 @@ The core idea: **Copilot becomes an infrastructure-aware pair programmer** that 
 
 ### Three-Layer Tool Architecture
 
-The server organizes 15 MCP tools into three layers that work together:
+The server organizes MCP tools into layered capabilities that work together:
 
 **Layer 1 — Retrieval** (find and fetch)
 | Tool | Purpose |
@@ -40,6 +40,15 @@ The server organizes 15 MCP tools into three layers that work together:
 | `get_playbook` | Get ordered troubleshooting steps for a detected pattern |
 | `record_issue` | Save diagnostic sessions to persistent SQLite history |
 | `query_history` | Surface past root causes and best tool order for a pattern |
+
+**Layer 4 — Runtime and IaC CLI (stub-first)** (cluster/runtime execution hooks)
+| Tool Group | Purpose |
+|---|---|
+| `runtime_environment_info` | Snapshot active repo path, index stats, env selectors, and CLI availability |
+| `kubectl_*` | Runtime cluster checks (pods, events, service/endpoints, ingress, gateway, httproute) |
+| `argocd_*` | Runtime ArgoCD checks (app, app events, app resources) |
+| `opentofu_*` | OpenTofu checks (version, fmt, validate, plan, show plan) |
+| `terraform_*` | Terraform checks (version, fmt, validate, plan, show plan) |
 
 ### How Copilot Uses the Tools
 
@@ -97,6 +106,8 @@ cd MCP-server
 
 # Point at your infra repo (or use the current directory)
 export HOST_REPO_PATH=/path/to/your/gitops-repo
+# Optional for multi-repo dynamic selection:
+# export HOST_REPO_ROOT=/path/to/parent-containing-multiple-repos
 
 # Start the stack
 docker compose up -d --build
@@ -111,7 +122,7 @@ curl -s http://127.0.0.1:8081/healthz | python3 -m json.tool
 ### Smoke Test
 
 ```sh
-# List all 15 tools
+# List all tools
 curl -s http://127.0.0.1:8081/mcp \
   -H 'Content-Type: application/json' \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' \
@@ -133,7 +144,10 @@ curl -s http://127.0.0.1:8081/mcp \
 | Variable | Default | Description |
 |---|---|---|
 | `HOST_REPO_PATH` | `.` (current dir) | Host path to the repo to index (mounted read-only) |
-| `REPO_PATH` | `/repo` | Container path for the indexed repo |
+| `HOST_REPO_ROOT` | `..` (parent dir) | Optional host parent directory mounted at `/repos` for multi-repo dynamic selection |
+| `REPO_PATH` | `/repo` | Container path for the indexed repo. Also supports glob patterns like `/repos/*` |
+| `WORKSPACE_REPO_NAME` | unset | Optional selector when `REPO_PATH` is a glob (for example `aws`) |
+| `TARGET_REPO_NAME` | unset | Backward-compatible selector alias for `WORKSPACE_REPO_NAME` |
 | `OLLAMA_MODEL` | `qwen2.5-coder:7b` | Model for optional LLM reasoning |
 | `OLLAMA_BASE_URL` | `http://ollama:11434` | Ollama API URL |
 | `VSCODE_MCP_JSON_PATH` | `/workspace/.vscode/mcp.json` | Optional JSON config file used for runtime overrides |
@@ -181,7 +195,8 @@ The server also exposes direct REST endpoints on port `8081`:
       "type": "http",
             "url": "http://127.0.0.1:8081/mcp",
             "env": {
-                "REPO_PATH": "/repo",
+                "REPO_PATH": "/repos/*",
+                "WORKSPACE_REPO_NAME": "${workspaceFolderBasename}",
                 "OLLAMA_MODEL": "qwen2.5-coder:7b",
                 "OLLAMA_BASE_URL": "http://ollama:11434"
             }
@@ -194,7 +209,7 @@ Values under `servers.local-infra-assistant.env` override `.env` values for matc
 
 3. In VS Code, open the Command Palette and run **MCP: List Servers**
 4. Trust the `local-infra-assistant` workspace server
-5. The 15 tools now appear in Copilot Chat — Copilot will call them automatically when relevant
+5. MCP tools now appear in Copilot Chat — Copilot will call them automatically when relevant
 
 ### How It Looks in Practice
 
@@ -225,7 +240,7 @@ Copilot will call the MCP tools, gather evidence from your repo, and provide gro
 - **No live cluster access** — the server indexes Git repos only. It cannot query running pods, live ArgoCD status, or cluster events. Cluster tool stubs are provided for future integration.
 - **CPU-only LLM by default** — Ollama on CPU is slower than GPU. The 7B model works but larger models may be impractical without a GPU.
 - **Pattern coverage is finite** — the classifier knows 11 problem types. Novel or unusual failure modes won't match any pattern and fall back to generic search.
-- **Single-repo indexing** — the server indexes one repo at a time. Multi-repo setups require multiple instances or re-indexing.
+- **Broad repo roots can reduce precision** — wildcard indexing can include multiple repos. Use `WORKSPACE_REPO_NAME` (or `TARGET_REPO_NAME`) to select the right one for each workspace.
 - **Docker required** — the stack runs in Docker Compose. Native installation is possible but not documented.
 - **Ollama model pull needed** — first startup requires downloading the model (~4GB), which takes time on slow connections.
 - **MCP protocol maturity** — MCP is still evolving. Breaking changes in the protocol spec or VS Code's MCP client may require updates.

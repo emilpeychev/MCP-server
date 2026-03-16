@@ -123,6 +123,12 @@ def test_mcp_tools_list():
     assert "get_playbook" in tool_names
     assert "record_issue" in tool_names
     assert "query_history" in tool_names
+    # Runtime/IaC layer
+    assert "runtime_environment_info" in tool_names
+    assert "kubectl_get_pods" in tool_names
+    assert "argocd_get_app" in tool_names
+    assert "opentofu_validate" in tool_names
+    assert "terraform_validate" in tool_names
 
 
 def test_inspect_argocd_endpoint(monkeypatch):
@@ -159,6 +165,23 @@ def test_mcp_tool_call_search_repo(monkeypatch):
 
     assert response.status_code == 200
     assert response.json()["result"]["structuredContent"]["files"] == ["charts/harbor/values.yaml"]
+
+
+def test_mcp_tool_call_runtime_environment_info():
+    response = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "tools/call",
+            "params": {"name": "runtime_environment_info", "arguments": {}},
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()["result"]["structuredContent"]["data"]
+    assert "repo_path" in data
+    assert "cli_available" in data
 
 
 def test_repo_search_dedupes_and_filters_noise(monkeypatch):

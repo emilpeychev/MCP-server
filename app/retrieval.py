@@ -1,13 +1,18 @@
 from __future__ import annotations
 
+import glob
+import logging
 import re
 from dataclasses import dataclass
+import os
 from pathlib import Path
 
 import faiss
 import numpy as np
 
 from .config import get_config_value
+
+logger = logging.getLogger(__name__)
 
 SUPPORTED_SUFFIXES = {".yaml", ".yml", ".md", ".tf", ".py"}
 IGNORED_PARTS = {".git", "__pycache__", ".pytest_cache", ".mypy_cache", ".venv", "node_modules"}
@@ -25,14 +30,14 @@ class ChunkRecord:
 
 class RepoIndex:
     def __init__(self) -> None:
-        self.repo_path = Path(get_config_value("REPO_PATH", "/repo")).resolve()
+        self.repo_path = self._resolve_repo_path(get_config_value("REPO_PATH", "/repo"))
         self.index: faiss.IndexFlatL2 | None = None
         self.records: list[ChunkRecord] = []
         self.indexed_files = 0
 
     def rebuild(self, repo_path: str | Path | None = None) -> dict:
         if repo_path is not None:
-            self.repo_path = Path(repo_path).resolve()
+            self.repo_path = self._resolve_repo_path(str(repo_path))
 
         self.records = []
         self.indexed_files = 0
@@ -96,6 +101,77 @@ class RepoIndex:
             paths.append(path)
         return paths
 
+    def _resolve_repo_path(self, configured_path: str) -> Path:
+        raw_path = configured_path.strip() if configured_path else "/repo"
+        if not raw_path:
+            raw_path = "/repo"
+
+        expanded_path = self._expand_workspace_tokens(raw_path)
+        if not any(char in expanded_path for char in "*?[]"):
+            return Path(expanded_path).resolve()
+
+        matches = sorted(Path(candidate).resolve() for candidate in glob.glob(expanded_path) if Path(candidate).is_dir())
+        if not matches:
+            logger.warning("REPO_PATH pattern '%s' had no directory matches.", expanded_path)
+            return Path(expanded_path).resolve()
+
+        preferred_repo = self._get_workspace_repo_selector()
+        if preferred_repo:
+            preferred_name = Path(preferred_repo).name
+            for candidate in matches:
+                if candidate.name == preferred_name:
+                    return candidate
+            logger.warning(
+                "No REPO_PATH match for workspace selector '%s'. Using first match '%s'.",
+                preferred_name,
+                matches[0],
+            )
+
+        if len(matches) > 1:
+            logger.warning(
+                "REPO_PATH pattern '%s' matched multiple repos (%s). Using '%s'. Set WORKSPACE_REPO_NAME to choose.",
+                expanded_path,
+                ", ".join(path.name for path in matches),
+                matches[0],
+            )
+        return matches[0]
+
+    def _expand_workspace_tokens(self, path_value: str) -> str:
+        replacements = {
+            "${workspaceFolderBasename}": self._get_workspace_repo_selector(),
+            "${WORKSPACE_REPO_NAME}": self._get_workspace_repo_selector(),
+        }
+
+        expanded = path_value
+        for token, value in replacements.items():
+            if token in expanded and value:
+                expanded = expanded.replace(token, value)
+        return os.path.expandvars(expanded)
+
+    def _get_workspace_repo_selector(self) -> str:
+        selector = self._normalize_selector(get_config_value("WORKSPACE_REPO_NAME", "").strip())
+        if selector:
+            return selector
+
+        selector = self._normalize_selector(get_config_value("TARGET_REPO_NAME", "").strip())
+        if selector:
+            return selector
+
+        selector = os.getenv("WORKSPACE_REPO_NAME", "").strip()
+        if selector:
+            return selector
+
+        host_repo_path = os.getenv("HOST_REPO_PATH", "").strip()
+        if host_repo_path and host_repo_path not in {".", "./"}:
+            return Path(host_repo_path).name
+
+        return ""
+
+    def _normalize_selector(self, selector: str) -> str:
+        if selector.startswith("${") and selector.endswith("}"):
+            return ""
+        return selector
+
     def _chunk_text(self, content: str) -> list[str]:
         normalized = content.replace("\r\n", "\n")
         if len(normalized) <= CHUNK_SIZE:
@@ -138,3 +214,4 @@ def search_repo(query: str, limit: int = 5) -> dict:
 
 def get_index_stats() -> dict:
     return _REPO_INDEX.stats
+
