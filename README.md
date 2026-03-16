@@ -136,6 +136,8 @@ curl -s http://127.0.0.1:8081/mcp \
 | `REPO_PATH` | `/repo` | Container path for the indexed repo |
 | `OLLAMA_MODEL` | `qwen2.5-coder:7b` | Model for optional LLM reasoning |
 | `OLLAMA_BASE_URL` | `http://ollama:11434` | Ollama API URL |
+| `VSCODE_MCP_JSON_PATH` | `/workspace/.vscode/mcp.json` | Optional JSON config file used for runtime overrides |
+| `VSCODE_MCP_SERVER_NAME` | `local-infra-assistant` | Server key inside the MCP JSON used for overrides |
 | `ISSUE_DB_PATH` | `/app/data/issues.db` | SQLite path for issue memory |
 
 ### REST API
@@ -177,11 +179,18 @@ The server also exposes direct REST endpoints on port `8081`:
   "servers": {
     "local-infra-assistant": {
       "type": "http",
-      "url": "http://127.0.0.1:8081/mcp"
+            "url": "http://127.0.0.1:8081/mcp",
+            "env": {
+                "REPO_PATH": "/repo",
+                "OLLAMA_MODEL": "qwen2.5-coder:7b",
+                "OLLAMA_BASE_URL": "http://ollama:11434"
+            }
     }
   }
 }
 ```
+
+Values under `servers.local-infra-assistant.env` override `.env` values for matching keys inside the running assistant service.
 
 3. In VS Code, open the Command Palette and run **MCP: List Servers**
 4. Trust the `local-infra-assistant` workspace server

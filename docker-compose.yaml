@@ -19,9 +19,12 @@ services:
       - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen2.5-coder:7b}
       - OLLAMA_BASE_URL=http://ollama:11434
       - REPO_PATH=${REPO_PATH:-/repo}
+      - VSCODE_MCP_JSON_PATH=${VSCODE_MCP_JSON_PATH:-/workspace/.vscode/mcp.json}
+      - VSCODE_MCP_SERVER_NAME=${VSCODE_MCP_SERVER_NAME:-local-infra-assistant}
     restart: unless-stopped 
     volumes:
-      - ${HOST_REPO_PATH:-.}:/repo:ro
+      - ${HOST_REPO_PATH:-.}:${REPO_PATH:-/repo}:ro
+      - ./.vscode:/workspace/.vscode:ro
       - langchain_data:/app/data
     depends_on:
       - ollama

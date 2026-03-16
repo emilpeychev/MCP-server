@@ -18,8 +18,8 @@ This guide shows how to use GitHub Copilot in VS Code with this local MCP server
 
 ```sh
 cp .env.example .env
-# Optional: pick a different repository under HOST_REPO_ROOT
-# Example: TARGET_REPO_NAME=cloud-enablement-gitops-infrastructure
+# Optional: point to a different repository on your host
+# Example: HOST_REPO_PATH=/home/you/repos/cloud-enablement-gitops-infrastructure
 
 docker compose up -d --build
 ```
@@ -47,11 +47,18 @@ This workspace already includes MCP config in `.vscode/mcp.json`:
   "servers": {
     "local-infra-assistant": {
       "type": "http",
-      "url": "http://127.0.0.1:8081/mcp"
+      "url": "http://127.0.0.1:8081/mcp",
+      "env": {
+        "REPO_PATH": "/repo",
+        "OLLAMA_MODEL": "qwen2.5-coder:7b",
+        "OLLAMA_BASE_URL": "http://ollama:11434"
+      }
     }
   }
 }
 ```
+
+The `env` object above overrides matching values from `.env` for the running assistant service.
 
 In VS Code:
 
@@ -107,7 +114,8 @@ curl -s http://127.0.0.1:8081/mcp \
   - Restart stack: `docker compose up -d --force-recreate infra-assistant`.
 
 - Wrong repository is being indexed:
-  - Set `TARGET_REPO_NAME` in `.env`.
+  - Set `HOST_REPO_PATH` and `REPO_PATH` in `.env`.
+  - Or override `REPO_PATH` in `.vscode/mcp.json` under `servers.local-infra-assistant.env`.
   - Recreate service: `docker compose up -d --build --force-recreate infra-assistant`.
   - Confirm with `curl http://127.0.0.1:8081/healthz`.
 

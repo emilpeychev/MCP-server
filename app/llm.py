@@ -1,9 +1,10 @@
 import logging
-import os
 from dataclasses import dataclass
 
 import requests
 from langchain_ollama import OllamaLLM
+
+from .config import get_config_value
 
 logger = logging.getLogger(__name__)
 
@@ -21,13 +22,13 @@ class OllamaSettings:
 
 def get_settings() -> OllamaSettings:
     return OllamaSettings(
-        base_url=os.getenv("OLLAMA_BASE_URL", "http://ollama:11434"),
-        model=os.getenv("OLLAMA_MODEL", "qwen2.5-coder:7b"),
-        timeout=float(os.getenv("OLLAMA_TIMEOUT", "120")),
-        max_context=int(os.getenv("MAX_CONTEXT", "15000")),
-        temperature=float(os.getenv("OLLAMA_TEMPERATURE", "0.1")),
-        num_predict=int(os.getenv("OLLAMA_NUM_PREDICT", "1024")),
-        repeat_penalty=float(os.getenv("OLLAMA_REPEAT_PENALTY", "1.1")),
+        base_url=get_config_value("OLLAMA_BASE_URL", "http://ollama:11434"),
+        model=get_config_value("OLLAMA_MODEL", "qwen2.5-coder:7b"),
+        timeout=get_config_value("OLLAMA_TIMEOUT", 120.0, float),
+        max_context=get_config_value("MAX_CONTEXT", 15000, int),
+        temperature=get_config_value("OLLAMA_TEMPERATURE", 0.1, float),
+        num_predict=get_config_value("OLLAMA_NUM_PREDICT", 1024, int),
+        repeat_penalty=get_config_value("OLLAMA_REPEAT_PENALTY", 1.1, float),
     )
 
 

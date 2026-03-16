@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
 
 import faiss
 import numpy as np
+
+from .config import get_config_value
 
 SUPPORTED_SUFFIXES = {".yaml", ".yml", ".md", ".tf", ".py"}
 IGNORED_PARTS = {".git", "__pycache__", ".pytest_cache", ".mypy_cache", ".venv", "node_modules"}
@@ -24,7 +25,7 @@ class ChunkRecord:
 
 class RepoIndex:
     def __init__(self) -> None:
-        self.repo_path = Path(os.getenv("REPO_PATH", "/repo")).resolve()
+        self.repo_path = Path(get_config_value("REPO_PATH", "/repo")).resolve()
         self.index: faiss.IndexFlatL2 | None = None
         self.records: list[ChunkRecord] = []
         self.indexed_files = 0
