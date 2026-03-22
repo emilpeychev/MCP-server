@@ -5,6 +5,7 @@ from pathlib import Path
 import yaml
 
 from ..retrieval import get_index_stats
+from . import iter_yaml_files
 
 
 def inspect_argocd_applications(app_name: str | None = None) -> dict:
@@ -12,7 +13,7 @@ def inspect_argocd_applications(app_name: str | None = None) -> dict:
     applications = []
     files = []
 
-    for path in _iter_yaml_files(repo_path):
+    for path in iter_yaml_files(repo_path):
         content = path.read_text(encoding="utf-8", errors="ignore")
         try:
             documents = [doc for doc in yaml.safe_load_all(content) if isinstance(doc, dict)]
@@ -63,13 +64,3 @@ def _application_findings(name: str, spec: dict) -> list[dict]:
     if sync_policy.get("automated") and not sync_policy.get("syncOptions"):
         findings.append({"severity": "info", "message": f"Application {name} enables automated sync without explicit syncOptions."})
     return findings
-
-
-def _iter_yaml_files(repo_path: Path):
-    if not repo_path.exists():
-        return []
-    files = []
-    for path in repo_path.rglob("*"):
-        if path.is_file() and path.suffix.lower() in {".yaml", ".yml"} and ".git" not in path.parts:
-            files.append(path)
-    return files

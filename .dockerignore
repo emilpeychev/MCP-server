@@ -1,0 +1,12 @@
+.git
+__pycache__
+*.pyc
+*.pyo
+app/__pycache__
+app/tools/__pycache__
+app/test_*.py
+pytest.ini
+.github
+.vscode
+*.md
+!app/requirements.txt

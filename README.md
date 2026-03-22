@@ -84,6 +84,7 @@ flowchart LR
 ### Performance Features
 
 - **LRU content-hash cache** — repeated tool calls return in <1ms (86% hit rate in benchmarks)
+- **Cached LLM client** — Ollama client is reused across requests when settings are unchanged, avoiding per-request initialization overhead
 - **Strict LLM prompts** — structured Summary/Details/Files output from Ollama
 - **Smart output limits** — head+tail preview for large files, per-file and total character budgets
 - **Verbosity modes** — compact (≤500 chars), normal (≤1500), detailed (≤5000)
@@ -231,6 +232,8 @@ Copilot will call the MCP tools, gather evidence from your repo, and provide gro
 - **Structured troubleshooting** — 11 problem patterns with step-by-step playbooks mean Copilot follows a consistent diagnostic process instead of ad-hoc reasoning.
 - **Persistent issue memory** — SQLite-backed history lets the system learn which root causes are common and which tool order works best. Answers improve over time.
 - **Low resource overhead** — the assistant container runs with 2GB RAM and 1 CPU. Ollama handles the heavy LLM work separately.
+- **Security hardened** — path traversal protection via `Path.is_relative_to()`, parameterized SQL, non-root Docker user, read-only repo mount, and `.dockerignore` excluding build artifacts.
+- **Pinned dependencies** — all Python packages are version-pinned in `requirements.txt` for reproducible builds.
 - **No vendor lock-in** — built on open standards (MCP protocol, JSON-RPC 2.0, Ollama, FAISS). Swap models, switch editors, or extend tools without rewriting.
 - **Works with any Git repo** — point `HOST_REPO_PATH` at any repo and the FAISS index rebuilds automatically on startup.
 - **Performance-optimized** — LRU caching, character budgets, smart previews, and compact output modes keep token usage low and responses fast.
@@ -390,7 +393,9 @@ flowchart TD
 python3 -m pytest app/test_main.py -v
 ```
 
-49 tests covering all three layers, REST endpoints, MCP tool calls, cache behavior, and issue memory.
+50 tests covering all three layers, REST endpoints, MCP tool calls, cache behavior, and issue memory.
+
+Note: Test files are excluded from the Docker image via `.dockerignore` — run tests locally against the source tree.
 
 ## Additional Guides
 

@@ -10,7 +10,7 @@ def find_related_files(path: str, max_results: int = 5) -> dict:
     repo_path = Path(get_index_stats()["repo_path"]).resolve()
     target = (repo_path / path).resolve()
 
-    if not str(target).startswith(str(repo_path)):
+    if not target.is_relative_to(repo_path):
         return {"result": "Path outside repository.", "files": [], "data": {}}
 
     related: list[str] = []

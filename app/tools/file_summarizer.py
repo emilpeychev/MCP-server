@@ -32,7 +32,7 @@ def summarize_files(
 
     for rel_path in paths:
         full_path = (repo_path / rel_path).resolve()
-        if not str(full_path).startswith(str(repo_path)):
+        if not full_path.is_relative_to(repo_path):
             summaries.append({"path": rel_path, "error": "Path outside repository."})
             continue
         if not full_path.is_file():

@@ -151,6 +151,7 @@ def test_inspect_gateway_endpoint(monkeypatch):
 
 def test_mcp_tool_call_search_repo(monkeypatch):
     monkeypatch.setattr(main_module.mcp_server, "search_repo", lambda query, limit=5: {"result": "Found 1 repository match.", "files": ["charts/harbor/values.yaml"], "data": {"matches": [{"path": "charts/harbor/values.yaml"}]}})
+    original_handler = main_module.mcp_server.TOOLS["search_repo"]["handler"]
     main_module.mcp_server.TOOLS["search_repo"]["handler"] = lambda arguments: main_module.mcp_server.search_repo(arguments["query"], limit=arguments.get("max_results", 5))
 
     response = client.post(
@@ -165,6 +166,7 @@ def test_mcp_tool_call_search_repo(monkeypatch):
 
     assert response.status_code == 200
     assert response.json()["result"]["structuredContent"]["files"] == ["charts/harbor/values.yaml"]
+    main_module.mcp_server.TOOLS["search_repo"]["handler"] = original_handler
 
 
 def test_mcp_tool_call_runtime_environment_info():
@@ -316,12 +318,13 @@ def test_prepare_copilot_brief_endpoint(monkeypatch):
 
 
 def test_mcp_tool_call_compress_logs(monkeypatch):
-    monkeypatch.setattr(main_module.mcp_server, "compress_logs", lambda log_text, max_chars=3000: {
+    monkeypatch.setattr(main_module.mcp_server, "compress_logs", lambda log_text, max_chars=2500: {
         "result": "Detected argocd log patterns with 1 signal(s).",
         "files": [],
         "data": {"log_type": "argocd", "signals": ["sync failure"], "suggestions": ["check status"], "excerpt": "err"},
     })
-    main_module.mcp_server.TOOLS["compress_logs"]["handler"] = lambda args: main_module.mcp_server.compress_logs(args["log_text"], max_chars=args.get("max_chars", 3000))
+    original_handler = main_module.mcp_server.TOOLS["compress_logs"]["handler"]
+    main_module.mcp_server.TOOLS["compress_logs"]["handler"] = lambda args: main_module.mcp_server.compress_logs(args["log_text"], max_chars=args.get("max_chars", 2500))
 
     response = client.post(
         "/mcp",
@@ -335,6 +338,7 @@ def test_mcp_tool_call_compress_logs(monkeypatch):
 
     assert response.status_code == 200
     assert "argocd" in response.json()["result"]["structuredContent"]["data"]["log_type"]
+    main_module.mcp_server.TOOLS["compress_logs"]["handler"] = original_handler
 
 
 def test_mcp_tool_call_prepare_copilot_brief(monkeypatch):
@@ -343,6 +347,7 @@ def test_mcp_tool_call_prepare_copilot_brief(monkeypatch):
         "files": affected_files or [],
         "data": {"question": question, "findings": findings or [], "affected_files": affected_files or [], "likely_cause": likely_cause or ""},
     })
+    original_handler = main_module.mcp_server.TOOLS["prepare_copilot_brief"]["handler"]
     main_module.mcp_server.TOOLS["prepare_copilot_brief"]["handler"] = lambda args: main_module.mcp_server.prepare_copilot_brief(
         question=args["question"], findings=args.get("findings"), affected_files=args.get("affected_files"), likely_cause=args.get("likely_cause"), verbosity=args.get("verbosity", "compact"),
     )
@@ -359,6 +364,7 @@ def test_mcp_tool_call_prepare_copilot_brief(monkeypatch):
 
     assert response.status_code == 200
     assert "ingress" in response.json()["result"]["content"][0]["text"]
+    main_module.mcp_server.TOOLS["prepare_copilot_brief"]["handler"] = original_handler
 
 
 # --- Cache tests ---

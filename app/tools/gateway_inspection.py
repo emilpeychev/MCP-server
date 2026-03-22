@@ -5,6 +5,7 @@ from pathlib import Path
 import yaml
 
 from ..retrieval import get_index_stats
+from . import iter_yaml_files
 
 
 def inspect_gateway_routes(hostname: str | None = None) -> dict:
@@ -13,7 +14,7 @@ def inspect_gateway_routes(hostname: str | None = None) -> dict:
     routes = []
     files = set()
 
-    for path in _iter_yaml_files(repo_path):
+    for path in iter_yaml_files(repo_path):
         content = path.read_text(encoding="utf-8", errors="ignore")
         try:
             documents = [doc for doc in yaml.safe_load_all(content) if isinstance(doc, dict)]
@@ -78,13 +79,3 @@ def _route_findings(route: dict, gateways: dict) -> list[dict]:
         if parent_ref not in gateways:
             findings.append({"severity": "warning", "message": f"HTTPRoute {route['name']} references missing Gateway {parent_ref}."})
     return findings
-
-
-def _iter_yaml_files(repo_path: Path):
-    if not repo_path.exists():
-        return []
-    files = []
-    for path in repo_path.rglob("*"):
-        if path.is_file() and path.suffix.lower() in {".yaml", ".yml"} and ".git" not in path.parts:
-            files.append(path)
-    return files

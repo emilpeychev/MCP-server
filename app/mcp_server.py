@@ -255,7 +255,7 @@ SUMMARIZATION_TOOLS = {
             },
             "required": ["log_text"],
         },
-        "handler": lambda args: compress_logs(args["log_text"], max_chars=args.get("max_chars", 3000)),
+        "handler": lambda args: compress_logs(args["log_text"], max_chars=args.get("max_chars", 2500)),
     },
     "render_helm": {
         "description": (
@@ -852,4 +852,4 @@ def _response(request_id: int | str | None, result: dict) -> JSONResponse:
 
 
 def _error(request_id: int | str | None, code: int, message: str) -> JSONResponse:
-    return JSONResponse({"jsonrpc": "2.0", "id": request_id, "error": {"code": code, "message": message}}, status_code=400)
+    return JSONResponse({"jsonrpc": "2.0", "id": request_id, "error": {"code": code, "message": message}})

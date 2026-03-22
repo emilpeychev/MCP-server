@@ -18,7 +18,7 @@ def read_file_slice(
     repo_path = Path(get_index_stats()["repo_path"]).resolve()
     full_path = (repo_path / path).resolve()
 
-    if not str(full_path).startswith(str(repo_path)):
+    if not full_path.is_relative_to(repo_path):
         return {"result": "Path outside repository.", "files": [], "data": {}}
 
     if not full_path.is_file():

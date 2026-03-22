@@ -20,6 +20,10 @@ class OllamaSettings:
     repeat_penalty: float
 
 
+_cached_client: OllamaLLM | None = None
+_cached_settings: OllamaSettings | None = None
+
+
 def get_settings() -> OllamaSettings:
     return OllamaSettings(
         base_url=get_config_value("OLLAMA_BASE_URL", "http://ollama:11434"),
@@ -33,8 +37,12 @@ def get_settings() -> OllamaSettings:
 
 
 def _get_client() -> OllamaLLM:
+    global _cached_client, _cached_settings
     settings = get_settings()
-    return OllamaLLM(
+    if _cached_client is not None and _cached_settings == settings:
+        return _cached_client
+    _cached_settings = settings
+    _cached_client = OllamaLLM(
         model=settings.model,
         base_url=settings.base_url,
         timeout=settings.timeout,
@@ -42,6 +50,7 @@ def _get_client() -> OllamaLLM:
         num_predict=settings.num_predict,
         repeat_penalty=settings.repeat_penalty,
     )
+    return _cached_client
 
 
 def warmup() -> None:
