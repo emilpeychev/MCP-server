@@ -25,7 +25,7 @@ Open Terminal and run:
 cd /home/eepeychev/repos/MCP
 docker compose up -d --build
 sleep 5
-docker exec ollama ollama pull qwen2.5-coder:7b
+docker exec ollama ollama pull granite-code:8b
 ```
 
 **Check it worked:**

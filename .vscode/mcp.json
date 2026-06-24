@@ -6,7 +6,7 @@
       "env": {
         "REPO_PATH": "/repos/*",
         "WORKSPACE_REPO_NAME": "${workspaceFolderBasename}",
-        "OLLAMA_MODEL": "qwen2.5-coder:7b",
+        "OLLAMA_MODEL": "granite-code:8b",
         "OLLAMA_BASE_URL": "http://ollama:11434"
       }
     }

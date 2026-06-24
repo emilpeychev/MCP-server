@@ -5,6 +5,7 @@ from fastapi import FastAPI, HTTPException, Request
 
 from . import llm, mcp_server, prompts, retrieval
 from .cache import tool_cache
+from .config import get_config_value
 from .models import (
     AnalyzeLogRequest,
     ArgoCDInspectRequest,
@@ -48,6 +49,9 @@ from .tools.yaml_review import review_yaml
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+MAX_QUESTION_CHARS = get_config_value("MAX_QUESTION_CHARS", 1200, int)
+MAX_CONTEXT_HARD_LIMIT = get_config_value("MAX_CONTEXT_HARD_LIMIT", 20000, int)
+
 
 def _normalize_text(value: str) -> str:
     return value.strip()
@@ -57,6 +61,8 @@ def _validate_question(question: str) -> str:
     normalized_question = _normalize_text(question)
     if not normalized_question:
         raise HTTPException(status_code=400, detail="Missing question.")
+    if len(normalized_question) > MAX_QUESTION_CHARS:
+        raise HTTPException(status_code=413, detail="Question too large.")
     return normalized_question
 
 
@@ -64,6 +70,8 @@ def _validate_context(content: str) -> str:
     normalized_content = _normalize_text(content)
     if not normalized_content:
         raise HTTPException(status_code=400, detail="Missing context.")
+    if len(normalized_content) > MAX_CONTEXT_HARD_LIMIT:
+        raise HTTPException(status_code=413, detail="Context too large.")
     if len(normalized_content) > llm.get_settings().max_context:
         raise HTTPException(status_code=413, detail="Context too large.")
     return normalized_content
@@ -79,11 +87,24 @@ def invoke_question(question: str) -> str:
 
 def invoke_repo_question(question: str, limit: int = 5) -> dict:
     repo_result = search_repo(question, limit=limit)
+    sources = repo_result.get("files", [])
+    if not sources:
+        return {
+            "response": "Cannot determine from the provided context.",
+            "sources": [],
+            "matches": repo_result.get("data", {}).get("matches", []),
+        }
+
     context = prompts.build_repo_context(repo_result)
     answer = llm.invoke_with_context(question=question, context=context, system_prompt=prompts.INFRA_ASSISTANT_PROMPT)
+
+    if not any(source in answer for source in sources):
+        evidence_block = "\n".join(f"- {source}" for source in sources)
+        answer = f"{answer}\n\nEvidence:\n{evidence_block}"
+
     return {
         "response": answer,
-        "sources": repo_result["files"],
+        "sources": sources,
         "matches": repo_result["data"].get("matches", []),
     }
 

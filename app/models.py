@@ -4,12 +4,12 @@ from pydantic import BaseModel, Field
 
 
 class AskRequest(BaseModel):
-    question: str = Field(..., description="Prompt to send directly to the model.")
+    question: str = Field(..., max_length=1200, description="Prompt to send directly to the model.")
 
 
 class ContextRequest(BaseModel):
-    question: str = Field(..., description="Question to answer using the supplied context.")
-    content: str = Field(..., description="Context used to answer the question.")
+    question: str = Field(..., max_length=1200, description="Question to answer using the supplied context.")
+    content: str = Field(..., max_length=20000, description="Context used to answer the question.")
 
 
 class SearchRepoRequest(BaseModel):

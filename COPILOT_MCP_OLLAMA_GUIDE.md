@@ -27,7 +27,7 @@ docker compose up -d --build
 Pull the model used by this service:
 
 ```sh
-docker exec ollama ollama pull qwen2.5-coder:7b
+docker exec ollama ollama pull granite-code:8b
 ```
 
 ## 2) Verify service health
@@ -51,7 +51,7 @@ This workspace already includes MCP config in `.vscode/mcp.json`:
       "env": {
         "REPO_PATH": "/repos/*",
         "WORKSPACE_REPO_NAME": "${workspaceFolderBasename}",
-        "OLLAMA_MODEL": "qwen2.5-coder:7b",
+        "OLLAMA_MODEL": "granite-code:8b",
         "OLLAMA_BASE_URL": "http://ollama:11434"
       }
     }
@@ -145,7 +145,7 @@ curl -s http://127.0.0.1:8081/mcp \
   - Confirm with `curl http://127.0.0.1:8081/healthz`.
 
 - Model errors:
-  - Pull model again: `docker exec ollama ollama pull qwen2.5-coder:7b`.
+  - Pull model again: `docker exec ollama ollama pull granite-code:8b`.
   - Confirm service env uses the same model in `.env` via `OLLAMA_MODEL`.
 
 If you asked for "ollala", this guide assumes you meant Ollama.

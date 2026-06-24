@@ -91,12 +91,12 @@ def test_ask_repo_endpoint(monkeypatch):
 
 
 def test_models_success(monkeypatch):
-    monkeypatch.setattr(main_module.llm, "list_models", lambda: {"models": [{"name": "qwen2.5-coder:7b"}]})
+    monkeypatch.setattr(main_module.llm, "list_models", lambda: {"models": [{"name": "granite-code:8b"}]})
 
     response = client.get("/models")
 
     assert response.status_code == 200
-    assert response.json() == {"models": [{"name": "qwen2.5-coder:7b"}]}
+    assert response.json() == {"models": [{"name": "granite-code:8b"}]}
 
 
 def test_mcp_tools_list():

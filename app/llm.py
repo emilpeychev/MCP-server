@@ -27,12 +27,12 @@ _cached_settings: OllamaSettings | None = None
 def get_settings() -> OllamaSettings:
     return OllamaSettings(
         base_url=get_config_value("OLLAMA_BASE_URL", "http://ollama:11434"),
-        model=get_config_value("OLLAMA_MODEL", "qwen2.5-coder:7b"),
+        model=get_config_value("OLLAMA_MODEL", "granite-code:8b"),
         timeout=get_config_value("OLLAMA_TIMEOUT", 120.0, float),
         max_context=get_config_value("MAX_CONTEXT", 15000, int),
-        temperature=get_config_value("OLLAMA_TEMPERATURE", 0.1, float),
-        num_predict=get_config_value("OLLAMA_NUM_PREDICT", 1024, int),
-        repeat_penalty=get_config_value("OLLAMA_REPEAT_PENALTY", 1.1, float),
+        temperature=get_config_value("OLLAMA_TEMPERATURE", 0.0, float),
+        num_predict=get_config_value("OLLAMA_NUM_PREDICT", 768, int),
+        repeat_penalty=get_config_value("OLLAMA_REPEAT_PENALTY", 1.15, float),
     )
 
 

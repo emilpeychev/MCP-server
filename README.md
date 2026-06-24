@@ -115,7 +115,7 @@ export HOST_REPO_PATH=/path/to/your/gitops-repo
 docker compose up -d --build
 
 # Pull the model (first time only)
-docker exec ollama ollama pull qwen2.5-coder:7b
+docker exec ollama ollama pull granite-code:8b
 
 # Verify
 curl -s http://127.0.0.1:8081/healthz | python3 -m json.tool
@@ -150,7 +150,7 @@ curl -s http://127.0.0.1:8081/mcp \
 | `REPO_PATH` | `/repo` | Container path for the indexed repo. Also supports glob patterns like `/repos/*` |
 | `WORKSPACE_REPO_NAME` | unset | Optional selector when `REPO_PATH` is a glob (for example `aws`) |
 | `TARGET_REPO_NAME` | unset | Backward-compatible selector alias for `WORKSPACE_REPO_NAME` |
-| `OLLAMA_MODEL` | `qwen2.5-coder:7b` | Model for optional LLM reasoning |
+| `OLLAMA_MODEL` | `granite-code:8b` | Model for optional LLM reasoning |
 | `OLLAMA_BASE_URL` | `http://ollama:11434` | Ollama API URL |
 | `VSCODE_MCP_JSON_PATH` | `/workspace/.vscode/mcp.json` | Optional JSON config file used for runtime overrides |
 | `VSCODE_MCP_SERVER_NAME` | `local-infra-assistant` | Server key inside the MCP JSON used for overrides |
@@ -204,7 +204,7 @@ The server also exposes direct REST endpoints on port `8081`:
             "env": {
                 "REPO_PATH": "/repos/*",
                 "WORKSPACE_REPO_NAME": "${workspaceFolderBasename}",
-                "OLLAMA_MODEL": "qwen2.5-coder:7b",
+                "OLLAMA_MODEL": "granite-code:8b",
                 "OLLAMA_BASE_URL": "http://ollama:11434"
             }
     }
@@ -307,7 +307,7 @@ flowchart TB
     end
 
     subgraph OllamaC["Ollama Container :11434"]
-        Model["qwen2.5-coder:7b"]
+        Model["granite-code:8b"]
     end
 
     L1 --> FAISS
@@ -337,7 +337,7 @@ flowchart LR
         end
 
         subgraph ollama["ollama\n10GB RAM · 10 CPU"]
-            LLM["qwen2.5-coder:7b"]
+            LLM["granite-code:8b"]
         end
 
         FastAPI -->|"HTTP :11434"| LLM
