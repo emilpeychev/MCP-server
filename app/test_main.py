@@ -124,6 +124,10 @@ def test_mcp_tools_list():
     assert "record_issue" in tool_names
     assert "query_history" in tool_names
     # Runtime/IaC layer
+    assert "graphify_status" in tool_names
+    assert "graphify_query" in tool_names
+    assert "graphify_path" in tool_names
+    assert "graphify_explain" in tool_names
     assert "runtime_environment_info" in tool_names
     assert "kubectl_get_pods" in tool_names
     assert "argocd_get_app" in tool_names
@@ -147,6 +151,58 @@ def test_inspect_gateway_endpoint(monkeypatch):
 
     assert response.status_code == 200
     assert response.json()["result"] == "gateway checked"
+
+
+def test_graphify_status_endpoint(monkeypatch):
+    monkeypatch.setattr(main_module, "graphify_status", lambda: {
+        "result": "Graphify CLI is available.",
+        "files": ["graphify-out/graph.json"],
+        "data": {"graph_exists": True},
+    })
+
+    response = client.get("/graphify-status")
+
+    assert response.status_code == 200
+    assert response.json()["data"]["graph_exists"] is True
+
+
+def test_graphify_query_endpoint(monkeypatch):
+    monkeypatch.setattr(main_module, "graphify_query", lambda question, dfs=False, budget=None: {
+        "result": "Graphify query completed.",
+        "files": ["graphify-out/graph.json"],
+        "data": {"ok": True, "output": f"answer for {question}", "dfs": dfs, "budget": budget},
+    })
+
+    response = client.post("/graphify-query", json={"question": "How does auth flow work?", "dfs": True, "budget": 1500})
+
+    assert response.status_code == 200
+    assert response.json()["data"]["ok"] is True
+
+
+def test_graphify_path_endpoint(monkeypatch):
+    monkeypatch.setattr(main_module, "graphify_path", lambda source, target: {
+        "result": "Graphify path lookup completed.",
+        "files": ["graphify-out/graph.json"],
+        "data": {"ok": True, "output": f"{source} -> {target}"},
+    })
+
+    response = client.post("/graphify-path", json={"source": "AuthModule", "target": "Database"})
+
+    assert response.status_code == 200
+    assert "AuthModule" in response.json()["data"]["output"]
+
+
+def test_graphify_explain_endpoint(monkeypatch):
+    monkeypatch.setattr(main_module, "graphify_explain", lambda node: {
+        "result": "Graphify explain completed.",
+        "files": ["graphify-out/graph.json"],
+        "data": {"ok": True, "output": f"{node} explanation"},
+    })
+
+    response = client.post("/graphify-explain", json={"node": "SwinTransformer"})
+
+    assert response.status_code == 200
+    assert "SwinTransformer" in response.json()["data"]["output"]
 
 
 def test_mcp_tool_call_search_repo(monkeypatch):
@@ -184,6 +240,61 @@ def test_mcp_tool_call_runtime_environment_info():
     data = response.json()["result"]["structuredContent"]["data"]
     assert "repo_path" in data
     assert "cli_available" in data
+
+
+def test_mcp_tool_call_graphify_status(monkeypatch):
+    monkeypatch.setattr(main_module.mcp_server, "graphify_status", lambda: {
+        "result": "Graphify status collected.",
+        "files": ["graphify-out/graph.json"],
+        "data": {"graph_exists": True},
+    })
+    original_handler = main_module.mcp_server.TOOLS["graphify_status"]["handler"]
+    main_module.mcp_server.TOOLS["graphify_status"]["handler"] = lambda _: main_module.mcp_server.graphify_status()
+
+    response = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 4,
+            "method": "tools/call",
+            "params": {"name": "graphify_status", "arguments": {}},
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["result"]["structuredContent"]["data"]["graph_exists"] is True
+    main_module.mcp_server.TOOLS["graphify_status"]["handler"] = original_handler
+
+
+def test_mcp_tool_call_graphify_query(monkeypatch):
+    monkeypatch.setattr(main_module.mcp_server, "graphify_query", lambda question, dfs=False, budget=None: {
+        "result": "Graphify query completed.",
+        "files": ["graphify-out/graph.json"],
+        "data": {"ok": True, "output": f"answer for {question}", "dfs": dfs, "budget": budget},
+    })
+    original_handler = main_module.mcp_server.TOOLS["graphify_query"]["handler"]
+    main_module.mcp_server.TOOLS["graphify_query"]["handler"] = (
+        lambda args: main_module.mcp_server.graphify_query(
+            question=args["question"], dfs=args.get("dfs", False), budget=args.get("budget")
+        )
+    )
+
+    response = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 5,
+            "method": "tools/call",
+            "params": {
+                "name": "graphify_query",
+                "arguments": {"question": "How does auth flow work?", "dfs": True, "budget": 1200},
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["result"]["structuredContent"]["data"]["ok"] is True
+    main_module.mcp_server.TOOLS["graphify_query"]["handler"] = original_handler
 
 
 def test_repo_search_dedupes_and_filters_noise(monkeypatch):
@@ -699,4 +810,90 @@ def test_mcp_tool_call_query_history(tmp_path, monkeypatch):
     assert response.status_code == 200
     content = response.json()["result"]["structuredContent"]
     assert content["data"]["pattern"] == "crashloop_backoff"
+
+
+# --- kubectl command tool tests ---
+
+
+def test_kubectl_get_pods_runs_direct_command(monkeypatch):
+    import app.tools.cluster_stubs as cluster_tools
+
+    monkeypatch.setattr(cluster_tools.shutil, "which", lambda binary: f"/usr/bin/{binary}")
+
+    class Completed:
+        returncode = 0
+        stdout = (
+            '{"items":[{"kind":"Pod","metadata":{"name":"api-0","namespace":"default"},'
+            '"status":{"phase":"Running"}}]}'
+        )
+        stderr = ""
+
+    captured: dict[str, list[str]] = {}
+
+    def fake_run(command, capture_output, text, check, timeout):
+        captured["command"] = command
+        return Completed()
+
+    monkeypatch.setattr(cluster_tools.subprocess, "run", fake_run)
+
+    result = cluster_tools.kubectl_get_pods(namespace="default", label_selector="app=api")
+
+    assert result["data"]["status"] == "ok"
+    assert captured["command"] == [
+        "/usr/bin/kubectl",
+        "get",
+        "pods",
+        "-n",
+        "default",
+        "-l",
+        "app=api",
+        "-o",
+        "json",
+    ]
+    assert result["data"]["item_count"] == 1
+    assert result["data"]["items"][0]["name"] == "api-0"
+
+
+def test_kubectl_missing_binary_returns_error(monkeypatch):
+    import app.tools.cluster_stubs as cluster_tools
+
+    monkeypatch.setattr(cluster_tools.shutil, "which", lambda _binary: None)
+
+    result = cluster_tools.kubectl_get_service(namespace="default")
+
+    assert result["data"]["status"] == "error"
+    assert "not available" in result["result"].lower()
+
+
+def test_kubectl_logs_previous_builds_command(monkeypatch):
+    import app.tools.cluster_stubs as cluster_tools
+
+    monkeypatch.setattr(cluster_tools.shutil, "which", lambda binary: f"/usr/bin/{binary}")
+
+    class Completed:
+        returncode = 0
+        stdout = "log-line"
+        stderr = ""
+
+    captured: dict[str, list[str]] = {}
+
+    def fake_run(command, capture_output, text, check, timeout):
+        captured["command"] = command
+        return Completed()
+
+    monkeypatch.setattr(cluster_tools.subprocess, "run", fake_run)
+
+    result = cluster_tools.kubectl_logs_previous(name="api-0", namespace="default", container="api")
+
+    assert result["data"]["status"] == "ok"
+    assert captured["command"] == [
+        "/usr/bin/kubectl",
+        "logs",
+        "api-0",
+        "--previous",
+        "-n",
+        "default",
+        "-c",
+        "api",
+    ]
 

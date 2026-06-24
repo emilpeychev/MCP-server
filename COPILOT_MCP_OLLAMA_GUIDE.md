@@ -105,7 +105,8 @@ Available tools exposed by this server:
 - Retrieval: `search_repo`, `read_file_slice`, `find_related_files`, `find_k8s_objects`
 - Summarization: `summarize_files`, `review_yaml`, `compress_logs`, `render_helm`, `inspect_argocd`, `inspect_gateway`, `prepare_copilot_brief`
 - Diagnostic: `classify_problem`, `get_playbook`, `record_issue`, `query_history`
-- Runtime and IaC stubs: `runtime_environment_info`, `kubectl_*`, `argocd_*`, `opentofu_*`, `terraform_*`
+- Graphify: `graphify_status`, `graphify_query`, `graphify_path`, `graphify_explain`
+- Runtime and IaC: `runtime_environment_info`, `kubectl_*` (direct commands; requires existing auth), `argocd_*`, `opentofu_*`, `terraform_*` (stubs)
 
 ## 5) Quick MCP smoke test (optional)
 

@@ -70,6 +70,21 @@ class GatewayInspectRequest(BaseModel):
     hostname: str | None = Field(default=None, description="Optional hostname filter for Gateway API resources.")
 
 
+class GraphifyQueryRequest(BaseModel):
+    question: str = Field(..., description="Natural-language graph query.")
+    dfs: bool = Field(default=False, description="Use DFS traversal instead of BFS.")
+    budget: int | None = Field(default=None, ge=100, le=100000, description="Optional token budget for the answer.")
+
+
+class GraphifyPathRequest(BaseModel):
+    source: str = Field(..., description="Source node or concept.")
+    target: str = Field(..., description="Target node or concept.")
+
+
+class GraphifyExplainRequest(BaseModel):
+    node: str = Field(..., description="Node or concept to explain.")
+
+
 class CopilotBriefRequest(BaseModel):
     question: str = Field(..., description="The original infrastructure question.")
     findings: list[str] | None = Field(default=None, description="Key findings from summarization tools.")

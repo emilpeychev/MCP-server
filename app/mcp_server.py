@@ -40,6 +40,7 @@ from .tools.file_finder import find_related_files
 from .tools.file_reader import read_file_slice
 from .tools.file_summarizer import summarize_files
 from .tools.gateway_inspection import inspect_gateway_routes
+from .tools.graphify_tools import graphify_explain, graphify_path, graphify_query, graphify_status
 from .tools.helm_render import render_helm
 from .tools.k8s_finder import find_k8s_objects
 from .tools.log_analysis import compress_logs
@@ -567,6 +568,59 @@ def _runtime_environment_info() -> dict:
 
 
 RUNTIME_TOOLS = {
+    "graphify_status": {
+        "description": (
+            "Check whether Graphify CLI and graphify-out/graph.json are available for the indexed repository."
+        ),
+        "inputSchema": {"type": "object", "properties": {}},
+        "handler": lambda _: graphify_status(),
+    },
+    "graphify_query": {
+        "description": (
+            "Run a natural-language Graphify query against an existing graph. "
+            "Supports BFS (default) or DFS traversal with optional budget."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "question": {"type": "string", "description": "Question to ask the knowledge graph."},
+                "dfs": {"type": "boolean", "default": False, "description": "Use DFS traversal instead of BFS."},
+                "budget": {
+                    "type": ["integer", "null"],
+                    "description": "Optional answer budget passed through to Graphify.",
+                },
+            },
+            "required": ["question"],
+        },
+        "handler": lambda args: graphify_query(
+            question=args["question"],
+            dfs=args.get("dfs", False),
+            budget=args.get("budget"),
+        ),
+    },
+    "graphify_path": {
+        "description": "Find the shortest path between two nodes or concepts using Graphify.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "source": {"type": "string", "description": "Source node or concept."},
+                "target": {"type": "string", "description": "Target node or concept."},
+            },
+            "required": ["source", "target"],
+        },
+        "handler": lambda args: graphify_path(source=args["source"], target=args["target"]),
+    },
+    "graphify_explain": {
+        "description": "Explain a specific graph node or concept in plain language using Graphify.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "node": {"type": "string", "description": "Node or concept to explain."},
+            },
+            "required": ["node"],
+        },
+        "handler": lambda args: graphify_explain(node=args["node"]),
+    },
     "runtime_environment_info": {
         "description": (
             "Return runtime environment details used by the assistant: active repo path, index stats, "
@@ -576,7 +630,7 @@ RUNTIME_TOOLS = {
         "handler": lambda _: _runtime_environment_info(),
     },
     "kubectl_get_pods": {
-        "description": "Stub for kubectl get pods. Returns not-configured status until cluster access is enabled.",
+        "description": "Run kubectl get pods directly. Requires existing kube context/auth; no login flow is performed.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -587,7 +641,7 @@ RUNTIME_TOOLS = {
         "handler": lambda args: kubectl_get_pods(namespace=args.get("namespace"), label_selector=args.get("label_selector")),
     },
     "kubectl_describe_pod": {
-        "description": "Stub for kubectl describe pod.",
+        "description": "Run kubectl describe pod directly. Requires existing kube context/auth; no login flow is performed.",
         "inputSchema": {
             "type": "object",
             "properties": {"name": {"type": "string"}, "namespace": {"type": ["string", "null"]}},
@@ -596,7 +650,7 @@ RUNTIME_TOOLS = {
         "handler": lambda args: kubectl_describe_pod(name=args["name"], namespace=args.get("namespace")),
     },
     "kubectl_get_events": {
-        "description": "Stub for kubectl get events.",
+        "description": "Run kubectl get events directly. Requires existing kube context/auth; no login flow is performed.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -607,7 +661,7 @@ RUNTIME_TOOLS = {
         "handler": lambda args: kubectl_get_events(namespace=args.get("namespace"), field_selector=args.get("field_selector")),
     },
     "kubectl_logs": {
-        "description": "Stub for kubectl logs.",
+        "description": "Run kubectl logs directly. Requires existing kube context/auth; no login flow is performed.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -620,7 +674,7 @@ RUNTIME_TOOLS = {
         "handler": lambda args: kubectl_logs(name=args["name"], namespace=args.get("namespace"), container=args.get("container")),
     },
     "kubectl_logs_previous": {
-        "description": "Stub for kubectl logs --previous.",
+        "description": "Run kubectl logs --previous directly. Requires existing kube context/auth; no login flow is performed.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -633,7 +687,7 @@ RUNTIME_TOOLS = {
         "handler": lambda args: kubectl_logs_previous(name=args["name"], namespace=args.get("namespace"), container=args.get("container")),
     },
     "kubectl_get_service": {
-        "description": "Stub for kubectl get service.",
+        "description": "Run kubectl get service directly. Requires existing kube context/auth; no login flow is performed.",
         "inputSchema": {
             "type": "object",
             "properties": {"name": {"type": ["string", "null"]}, "namespace": {"type": ["string", "null"]}},
@@ -641,7 +695,7 @@ RUNTIME_TOOLS = {
         "handler": lambda args: kubectl_get_service(name=args.get("name"), namespace=args.get("namespace")),
     },
     "kubectl_get_endpoints": {
-        "description": "Stub for kubectl get endpoints.",
+        "description": "Run kubectl get endpoints directly. Requires existing kube context/auth; no login flow is performed.",
         "inputSchema": {
             "type": "object",
             "properties": {"name": {"type": ["string", "null"]}, "namespace": {"type": ["string", "null"]}},
@@ -649,7 +703,7 @@ RUNTIME_TOOLS = {
         "handler": lambda args: kubectl_get_endpoints(name=args.get("name"), namespace=args.get("namespace")),
     },
     "kubectl_get_ingress": {
-        "description": "Stub for kubectl get ingress.",
+        "description": "Run kubectl get ingress directly. Requires existing kube context/auth; no login flow is performed.",
         "inputSchema": {
             "type": "object",
             "properties": {"name": {"type": ["string", "null"]}, "namespace": {"type": ["string", "null"]}},
@@ -657,7 +711,7 @@ RUNTIME_TOOLS = {
         "handler": lambda args: kubectl_get_ingress(name=args.get("name"), namespace=args.get("namespace")),
     },
     "kubectl_get_gateway": {
-        "description": "Stub for kubectl get gateway.",
+        "description": "Run kubectl get gateway directly. Requires existing kube context/auth; no login flow is performed.",
         "inputSchema": {
             "type": "object",
             "properties": {"name": {"type": ["string", "null"]}, "namespace": {"type": ["string", "null"]}},
@@ -665,7 +719,7 @@ RUNTIME_TOOLS = {
         "handler": lambda args: kubectl_get_gateway(name=args.get("name"), namespace=args.get("namespace")),
     },
     "kubectl_get_httproute": {
-        "description": "Stub for kubectl get httproute.",
+        "description": "Run kubectl get httproute directly. Requires existing kube context/auth; no login flow is performed.",
         "inputSchema": {
             "type": "object",
             "properties": {"name": {"type": ["string", "null"]}, "namespace": {"type": ["string", "null"]}},

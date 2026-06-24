@@ -41,11 +41,12 @@ The server organizes MCP tools into layered capabilities that work together:
 | `record_issue` | Save diagnostic sessions to persistent SQLite history |
 | `query_history` | Surface past root causes and best tool order for a pattern |
 
-**Layer 4 — Runtime and IaC CLI (stub-first)** (cluster/runtime execution hooks)
+**Layer 4 — Runtime and IaC CLI** (cluster/runtime execution hooks)
 | Tool Group | Purpose |
 |---|---|
+| `graphify_*` | Query an existing Graphify knowledge graph (status, query, path, explain) |
 | `runtime_environment_info` | Snapshot active repo path, index stats, env selectors, and CLI availability |
-| `kubectl_*` | Runtime cluster checks (pods, events, service/endpoints, ingress, gateway, httproute) |
+| `kubectl_*` | Run kubectl commands directly (requires existing kube context/auth; no login flow) |
 | `argocd_*` | Runtime ArgoCD checks (app, app events, app resources) |
 | `opentofu_*` | OpenTofu checks (version, fmt, validate, plan, show plan) |
 | `terraform_*` | Terraform checks (version, fmt, validate, plan, show plan) |
@@ -153,6 +154,7 @@ curl -s http://127.0.0.1:8081/mcp \
 | `OLLAMA_BASE_URL` | `http://ollama:11434` | Ollama API URL |
 | `VSCODE_MCP_JSON_PATH` | `/workspace/.vscode/mcp.json` | Optional JSON config file used for runtime overrides |
 | `VSCODE_MCP_SERVER_NAME` | `local-infra-assistant` | Server key inside the MCP JSON used for overrides |
+| `GRAPHIFY_BIN` | `graphify` | Optional Graphify CLI binary name or absolute path |
 | `ISSUE_DB_PATH` | `/app/data/issues.db` | SQLite path for issue memory |
 
 ### REST API
@@ -173,6 +175,10 @@ The server also exposes direct REST endpoints on port `8081`:
 | `/render-helm` | POST | Render Helm chart |
 | `/inspect-argocd` | POST | Inspect ArgoCD apps |
 | `/inspect-gateway` | POST | Inspect Gateway routes |
+| `/graphify-status` | GET | Check Graphify CLI and graph availability |
+| `/graphify-query` | POST | Run Graphify natural-language query |
+| `/graphify-path` | POST | Find shortest path between graph nodes |
+| `/graphify-explain` | POST | Explain a graph node |
 | `/prepare-copilot-brief` | POST | Build Copilot handoff brief |
 | `/classify-problem` | POST | Classify problem pattern |
 | `/get-playbook` | POST | Get troubleshooting playbook |

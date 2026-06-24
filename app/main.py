@@ -16,6 +16,9 @@ from .models import (
     CopilotBriefRequest,
     FindK8sObjectsRequest,
     FindRelatedFilesRequest,
+    GraphifyExplainRequest,
+    GraphifyPathRequest,
+    GraphifyQueryRequest,
     GatewayInspectRequest,
     GetPlaybookRequest,
     QueryHistoryRequest,
@@ -35,6 +38,7 @@ from .tools.file_finder import find_related_files
 from .tools.file_reader import read_file_slice
 from .tools.file_summarizer import summarize_files
 from .tools.gateway_inspection import inspect_gateway_routes
+from .tools.graphify_tools import graphify_explain, graphify_path, graphify_query, graphify_status
 from .tools.helm_render import render_helm
 from .tools.k8s_finder import find_k8s_objects
 from .tools.log_analysis import analyze_log, compress_logs
@@ -167,6 +171,30 @@ def inspect_argocd_endpoint(req: ArgoCDInspectRequest):
 @app.post("/inspect-gateway")
 def inspect_gateway_endpoint(req: GatewayInspectRequest):
     return inspect_gateway_routes(hostname=req.hostname)
+
+
+@app.get("/graphify-status")
+def graphify_status_endpoint():
+    return graphify_status()
+
+
+@app.post("/graphify-query")
+def graphify_query_endpoint(req: GraphifyQueryRequest):
+    question = _validate_question(req.question)
+    return graphify_query(question=question, dfs=req.dfs, budget=req.budget)
+
+
+@app.post("/graphify-path")
+def graphify_path_endpoint(req: GraphifyPathRequest):
+    source = _validate_question(req.source)
+    target = _validate_question(req.target)
+    return graphify_path(source=source, target=target)
+
+
+@app.post("/graphify-explain")
+def graphify_explain_endpoint(req: GraphifyExplainRequest):
+    node = _validate_question(req.node)
+    return graphify_explain(node=node)
 
 
 # --- New Retrieval endpoints ---
