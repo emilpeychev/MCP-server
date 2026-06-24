@@ -51,6 +51,17 @@ The server organizes MCP tools into layered capabilities that work together:
 | `opentofu_*` | OpenTofu checks (version, fmt, validate, plan, show plan) |
 | `terraform_*` | Terraform checks (version, fmt, validate, plan, show plan) |
 
+### Why Graphify Helps
+
+Graphify turns the repository into a knowledge map so Copilot can answer questions about relationships instead of only matching text. In this repo, the Graphify CLI builds `graphify-out/graph.json`, and the MCP tools query that existing graph with:
+
+- `graphify_status` to check whether the graph and CLI are ready
+- `graphify_query` to ask natural-language questions about the map
+- `graphify_path` to trace how two concepts are connected
+- `graphify_explain` to get a plain-language explanation of one node
+
+That helps when you want to understand how modules, docs, and tooling fit together, spot bridge nodes, and navigate the repo faster than reading files one by one.
+
 ### How Copilot Uses the Tools
 
 When you ask "Why is Harbor out of sync in ArgoCD?", Copilot can autonomously:
