@@ -861,7 +861,8 @@ def test_kubectl_missing_binary_returns_error(monkeypatch):
 
     result = cluster_tools.kubectl_get_service(namespace="default")
 
-    assert result["data"]["status"] == "error"
+    assert result["data"]["status"] == "unavailable"
+    assert result["data"]["category"] == "binary_missing"
     assert "not available" in result["result"].lower()
 
 

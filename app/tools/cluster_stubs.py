@@ -55,6 +55,29 @@ def _summary_item(item: dict) -> dict:
     return summary
 
 
+# stderr substrings that indicate an auth/context problem rather than a resource error
+_AUTH_ERROR_MARKERS = (
+    "Unable to connect to the server",
+    "You must be logged in to the server",
+    "Unauthorized",
+    "error: You must be logged in",
+    "exec plugin",
+    "getting credentials",
+    "the server has asked for the client to provide credentials",
+    "connection refused",
+    "no configuration has been provided",
+    "invalid apiVersion",
+)
+
+
+def _classify_stderr(stderr: str) -> str:
+    lowered = (stderr or "").lower()
+    for marker in _AUTH_ERROR_MARKERS:
+        if marker.lower() in lowered:
+            return "auth"
+    return "command"
+
+
 def _command_response(tool_name: str, command: list[str], expect_json: bool = False) -> dict:
     resolved_bin = shutil.which(command[0])
     if resolved_bin is None:
@@ -63,12 +86,13 @@ def _command_response(tool_name: str, command: list[str], expect_json: bool = Fa
             "files": [],
             "data": {
                 "tool": tool_name,
-                "status": "error",
+                "status": "unavailable",
+                "category": "binary_missing",
                 "command": command,
                 "exit_code": None,
                 "stdout": "",
                 "stderr": "",
-                "hint": f"Install {command[0]} and ensure kube context/auth is already configured.",
+                "hint": f"Install {command[0]} to enable this tool.",
             },
         }
 
@@ -99,12 +123,18 @@ def _command_response(tool_name: str, command: list[str], expect_json: bool = Fa
     stderr = _truncate(completed.stderr)
 
     if completed.returncode != 0:
+        category = _classify_stderr(stderr)
         return {
-            "result": "Command failed.",
+            "result": (
+                "Cluster access unverified (auth/context error)."
+                if category == "auth"
+                else "Command failed."
+            ),
             "files": [],
             "data": {
                 "tool": tool_name,
-                "status": "error",
+                "status": "unverified" if category == "auth" else "error",
+                "category": category,
                 "command": command,
                 "exit_code": completed.returncode,
                 "stdout": stdout,
