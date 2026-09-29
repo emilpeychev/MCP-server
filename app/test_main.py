@@ -866,6 +866,31 @@ def test_kubectl_missing_binary_returns_error(monkeypatch):
     assert "not available" in result["result"].lower()
 
 
+def test_kubectl_injects_kube_context(monkeypatch):
+    import app.tools.cluster_stubs as cluster_tools
+
+    monkeypatch.setattr(cluster_tools.shutil, "which", lambda binary: f"/usr/bin/{binary}")
+    monkeypatch.setattr(cluster_tools, "_kube_context", lambda: "kind-dev")
+
+    class Completed:
+        returncode = 0
+        stdout = '{"items":[]}'
+        stderr = ""
+
+    captured: dict[str, list[str]] = {}
+
+    def fake_run(command, capture_output, text, check, timeout):
+        captured["command"] = command
+        return Completed()
+
+    monkeypatch.setattr(cluster_tools.subprocess, "run", fake_run)
+
+    cluster_tools.kubectl_get_pods(namespace="argocd")
+
+    assert captured["command"][:4] == ["/usr/bin/kubectl", "--context", "kind-dev", "get"]
+
+
+
 def test_kubectl_logs_previous_builds_command(monkeypatch):
     import app.tools.cluster_stubs as cluster_tools
 

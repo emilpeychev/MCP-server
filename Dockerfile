@@ -1,15 +1,23 @@
 FROM python:3.11-slim
 
+# Match the host user that owns mounted ~/.kube and ~/.aws (default 1000) so read-only mounts are readable.
+ARG APP_UID=1000
+ARG APP_GID=1000
+
 WORKDIR /app
 ENV PYTHONUNBUFFERED=1
 COPY app/requirements.txt .
 
 RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir awscli
 RUN apt-get update && \
     apt-get install -y curl ca-certificates && \
     curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash && \
-    groupadd -r appuser && useradd -r -g appuser appuser && \
-    mkdir -p /app/data && chown appuser:appuser /app/data && \
+    curl -fsSL -o /usr/local/bin/kubectl "https://dl.k8s.io/release/$(curl -fsSL https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" && \
+    chmod +x /usr/local/bin/kubectl && \
+    groupadd -g ${APP_GID} appuser && useradd -u ${APP_UID} -g appuser -m -d /home/appuser appuser && \
+    mkdir -p /app/data /home/appuser/.kube && \
+    chown -R appuser:appuser /app/data /home/appuser && \
     rm -rf /var/lib/apt/lists/*
 COPY --chown=appuser:appuser app/ ./app
 USER appuser

@@ -27,12 +27,24 @@ services:
       - HOST_REPO_PATH=${HOST_REPO_PATH:-.}
       - VSCODE_MCP_JSON_PATH=${VSCODE_MCP_JSON_PATH:-/workspace/.vscode/mcp.json}
       - VSCODE_MCP_SERVER_NAME=${VSCODE_MCP_SERVER_NAME:-local-infra-assistant}
+      # Cluster access: select which kube context the kubectl tools use.
+      # Leave empty to use the kubeconfig's current-context.
+      - KUBECONFIG=${KUBECONFIG_IN_CONTAINER:-/home/appuser/.kube/config}
+      - KUBE_CONTEXT=${KUBE_CONTEXT:-}
+      - AWS_REGION=${AWS_REGION:-}
+      - AWS_PROFILE=${AWS_PROFILE:-}
     restart: unless-stopped 
     volumes:
       - ${HOST_REPO_PATH:-.}:${REPO_PATH:-/repo}:ro
       - ${HOST_REPO_ROOT:-..}:/repos:ro
       - ./.vscode:/workspace/.vscode:ro
       - langchain_data:/app/data
+      # Host credentials for live cluster access (read-only).
+      - ${HOST_KUBECONFIG:-${HOME}/.kube/config}:/home/appuser/.kube/config:ro
+      - ${HOST_AWS_DIR:-${HOME}/.aws}:/home/appuser/.aws:ro
+    # Lets a kind/minikube kubeconfig pointed at host.docker.internal reach the host.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       - ollama
     healthcheck:

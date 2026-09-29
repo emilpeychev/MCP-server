@@ -7,8 +7,11 @@ ArgoCD/OpenTofu/Terraform tools remain stubs.
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
+
+from ..config import get_config_value
 
 _NOT_CONFIGURED = (
     "Runtime CLI access not configured. Mount a kubeconfig and install kubectl/argocd/opentofu CLI to enable."
@@ -16,6 +19,20 @@ _NOT_CONFIGURED = (
 _KUBECTL_BIN = "kubectl"
 _CMD_TIMEOUT_SECONDS = 45
 _MAX_OUTPUT_CHARS = 12000
+
+
+def _kube_context() -> str:
+    return get_config_value("KUBE_CONTEXT", "", str).strip()
+
+
+def _maybe_inject_context(command: list[str]) -> list[str]:
+    """Insert --context <ctx> after the kubectl binary when KUBE_CONTEXT is set."""
+    if not command or os.path.basename(command[0]) != _KUBECTL_BIN:
+        return command
+    context = _kube_context()
+    if not context:
+        return command
+    return [command[0], "--context", context, *command[1:]]
 
 
 def _stub_response(tool_name: str, **kwargs: str) -> dict:
@@ -79,6 +96,7 @@ def _classify_stderr(stderr: str) -> str:
 
 
 def _command_response(tool_name: str, command: list[str], expect_json: bool = False) -> dict:
+    command = _maybe_inject_context(command)
     resolved_bin = shutil.which(command[0])
     if resolved_bin is None:
         return {
