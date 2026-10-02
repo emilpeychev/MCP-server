@@ -10,6 +10,8 @@ COPY app/requirements.txt .
 
 RUN pip install --no-cache-dir -r requirements.txt
 RUN pip install --no-cache-dir awscli
+# Graphify CLI: powers the graphify_* MCP tools (query/path/explain against graphify-out/graph.json).
+RUN pip install --no-cache-dir graphifyy==0.9.73
 RUN apt-get update && \
     apt-get install -y curl ca-certificates && \
     curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash && \
