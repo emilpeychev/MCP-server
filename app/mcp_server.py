@@ -40,7 +40,6 @@ from .tools.file_finder import find_related_files
 from .tools.file_reader import read_file_slice
 from .tools.file_summarizer import summarize_files
 from .tools.gateway_inspection import inspect_gateway_routes
-from .tools.graphify_tools import graphify_explain, graphify_path, graphify_query, graphify_status
 from .tools.helm_render import render_helm
 from .tools.k8s_finder import find_k8s_objects
 from .tools.log_analysis import compress_logs
@@ -568,59 +567,6 @@ def _runtime_environment_info() -> dict:
 
 
 RUNTIME_TOOLS = {
-    "graphify_status": {
-        "description": (
-            "Check whether Graphify CLI and graphify-out/graph.json are available for the indexed repository."
-        ),
-        "inputSchema": {"type": "object", "properties": {}},
-        "handler": lambda _: graphify_status(),
-    },
-    "graphify_query": {
-        "description": (
-            "Run a natural-language Graphify query against an existing graph. "
-            "Supports BFS (default) or DFS traversal with optional budget."
-        ),
-        "inputSchema": {
-            "type": "object",
-            "properties": {
-                "question": {"type": "string", "description": "Question to ask the knowledge graph."},
-                "dfs": {"type": "boolean", "default": False, "description": "Use DFS traversal instead of BFS."},
-                "budget": {
-                    "type": ["integer", "null"],
-                    "description": "Optional answer budget passed through to Graphify.",
-                },
-            },
-            "required": ["question"],
-        },
-        "handler": lambda args: graphify_query(
-            question=args["question"],
-            dfs=args.get("dfs", False),
-            budget=args.get("budget"),
-        ),
-    },
-    "graphify_path": {
-        "description": "Find the shortest path between two nodes or concepts using Graphify.",
-        "inputSchema": {
-            "type": "object",
-            "properties": {
-                "source": {"type": "string", "description": "Source node or concept."},
-                "target": {"type": "string", "description": "Target node or concept."},
-            },
-            "required": ["source", "target"],
-        },
-        "handler": lambda args: graphify_path(source=args["source"], target=args["target"]),
-    },
-    "graphify_explain": {
-        "description": "Explain a specific graph node or concept in plain language using Graphify.",
-        "inputSchema": {
-            "type": "object",
-            "properties": {
-                "node": {"type": "string", "description": "Node or concept to explain."},
-            },
-            "required": ["node"],
-        },
-        "handler": lambda args: graphify_explain(node=args["node"]),
-    },
     "runtime_environment_info": {
         "description": (
             "Return runtime environment details used by the assistant: active repo path, index stats, "

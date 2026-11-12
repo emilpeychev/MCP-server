@@ -44,23 +44,11 @@ The server organizes MCP tools into layered capabilities that work together:
 **Layer 4 — Runtime and IaC CLI** (cluster/runtime execution hooks)
 | Tool Group | Purpose |
 |---|---|
-| `graphify_*` | Query an existing Graphify knowledge graph (status, query, path, explain) |
 | `runtime_environment_info` | Snapshot active repo path, index stats, env selectors, and CLI availability |
 | `kubectl_*` | Run kubectl commands directly (requires existing kube context/auth; no login flow) |
 | `argocd_*` | Runtime ArgoCD checks (app, app events, app resources) |
 | `opentofu_*` | OpenTofu checks (version, fmt, validate, plan, show plan) |
 | `terraform_*` | Terraform checks (version, fmt, validate, plan, show plan) |
-
-### Why Graphify Helps
-
-Graphify turns the repository into a knowledge map so Copilot can answer questions about relationships instead of only matching text. In this repo, the Graphify CLI builds `graphify-out/graph.json`, and the MCP tools query that existing graph with:
-
-- `graphify_status` to check whether the graph and CLI are ready
-- `graphify_query` to ask natural-language questions about the map
-- `graphify_path` to trace how two concepts are connected
-- `graphify_explain` to get a plain-language explanation of one node
-
-That helps when you want to understand how modules, docs, and tooling fit together, spot bridge nodes, and navigate the repo faster than reading files one by one.
 
 ### How Copilot Uses the Tools
 
@@ -165,7 +153,6 @@ curl -s http://127.0.0.1:8081/mcp \
 | `OLLAMA_BASE_URL` | `http://ollama:11434` | Ollama API URL |
 | `VSCODE_MCP_JSON_PATH` | `/workspace/.vscode/mcp.json` | Optional JSON config file used for runtime overrides |
 | `VSCODE_MCP_SERVER_NAME` | `local-infra-assistant` | Server key inside the MCP JSON used for overrides |
-| `GRAPHIFY_BIN` | `graphify` | Optional Graphify CLI binary name or absolute path |
 | `ISSUE_DB_PATH` | `/app/data/issues.db` | SQLite path for issue memory |
 
 ### REST API
@@ -186,10 +173,6 @@ The server also exposes direct REST endpoints on port `8081`:
 | `/render-helm` | POST | Render Helm chart |
 | `/inspect-argocd` | POST | Inspect ArgoCD apps |
 | `/inspect-gateway` | POST | Inspect Gateway routes |
-| `/graphify-status` | GET | Check Graphify CLI and graph availability |
-| `/graphify-query` | POST | Run Graphify natural-language query |
-| `/graphify-path` | POST | Find shortest path between graph nodes |
-| `/graphify-explain` | POST | Explain a graph node |
 | `/prepare-copilot-brief` | POST | Build Copilot handoff brief |
 | `/classify-problem` | POST | Classify problem pattern |
 | `/get-playbook` | POST | Get troubleshooting playbook |
